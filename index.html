@@ -1,0 +1,4464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>わりざんのひっ算れんしゅう</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Zen+Maru+Gothic:wght@500;700;900&family=Klee+One:wght@600&display=swap');
+
+  /* ============ DESIGN TOKENS ============ */
+  :root {
+    --paper:       #fbf8f0;
+    --paper-2:     #f5f0e1;
+    --ink:         #2c3a4a;
+    --ink-soft:    #5a6878;
+    --grid:        #9dd4dc;       /* 方眼の線（少し濃いめのターコイズ） */
+    --grid-soft:   #cfeaee;
+    --line:        #c8d2dc;
+    --accent:      #f08a3e;
+    --accent-2:    #e85a4f;
+    --green:       #5a9f6b;
+    --blue:        #4a90c8;
+    --purple:      #8a6fb0;
+    --yellow:      #f5c842;
+    --maru-red:    #e63946;       /* 正解の赤丸 */
+    --shadow:      rgba(44, 58, 74, 0.12);
+    --shadow-deep: rgba(44, 58, 74, 0.25);
+
+    --font-display: 'Zen Maru Gothic', sans-serif;
+    --font-hand:    'Klee One', 'Zen Maru Gothic', cursive;
+    --font-ui:      'Kosugi Maru', sans-serif;
+
+    /* 方眼の1マスのサイズ（JSで動的に上書き） */
+    --cell: 64px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-ui);
+    color: var(--ink);
+    background: var(--paper);
+    user-select: none;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(245, 200, 66, 0.08), transparent 40%),
+      radial-gradient(circle at 80% 90%, rgba(74, 144, 200, 0.08), transparent 40%);
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+  /* ============ SCREENS ============ */
+  .screen { position: fixed; inset: 0; display: none; }
+  .screen.active { display: flex; }
+
+  /* ============ TITLE SCREEN ============ */
+  #titleScreen {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3vh 4vw;
+    gap: 2.5vh;
+  }
+  .title-header { text-align: center; position: relative; }
+  .title-header::before {
+    content: "✏️"; position: absolute; left: -3em; top: 0.3em;
+    font-size: 0.5em; transform: rotate(-15deg);
+  }
+  .title-header::after {
+    content: "📐"; position: absolute; right: -3em; top: 0.3em;
+    font-size: 0.5em; transform: rotate(15deg);
+  }
+  .app-title {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    color: var(--ink); letter-spacing: 0.08em;
+  }
+  .app-title .accent { color: var(--accent); }
+  .app-subtitle {
+    font-family: var(--font-hand);
+    font-size: clamp(0.95rem, 1.5vw, 1.2rem);
+    color: var(--ink-soft); margin-top: 0.4em;
+  }
+  .app-version {
+    font-family: var(--font-ui);
+    font-size: clamp(0.7rem, 1vw, 0.85rem);
+    color: var(--ink-soft); opacity: 0.6;
+    margin-top: 0.3em; letter-spacing: 0.05em;
+  }
+
+  .section-label {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.95rem, 1.4vw, 1.15rem);
+    color: var(--ink-soft); margin-bottom: 0.8vh;
+    text-align: center; letter-spacing: 0.05em;
+  }
+  .section-label .deco { color: var(--accent); }
+
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 1vw;
+    width: 94vw;
+    max-width: 1200px;
+  }
+  .level-card {
+    background: white; border: 2px solid var(--line);
+    border-radius: 1.2vw; padding: 1.8vh 0.6vw;
+    text-align: center; transition: all 0.2s ease;
+    box-shadow: 0 4px 0 var(--line);
+    min-height: 18vh;
+    display: flex; flex-direction: column; justify-content: center; gap: 0.6vh;
+  }
+  .level-card:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--line); }
+  .level-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 4px 0 var(--accent);
+    background: #fff8ef;
+  }
+  .level-card .lv-num {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(1.6rem, 2.6vw, 2.3rem);
+    color: var(--accent); line-height: 1;
+    position: relative;
+  }
+  .level-card .lv-num small {
+    font-size: 0.42em; color: var(--ink-soft);
+    display: block; font-weight: 700; margin-bottom: 0.3em;
+    letter-spacing: 0.05em;
+  }
+  /* 派生レベルの小ラベル (例: 0をたてる) */
+  .level-card .lv-num .lv-sub {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.32em; font-weight: 700;
+    color: white; background: var(--purple);
+    border-radius: 999px;
+    padding: 0.25em 0.6em;
+    margin: 0.4em auto 0;
+    width: fit-content;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+  .level-card .lv-title {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.78rem, 1.05vw, 0.95rem); color: var(--ink);
+  }
+  .level-card .lv-desc {
+    font-family: var(--font-hand);
+    font-size: clamp(0.65rem, 0.9vw, 0.8rem);
+    color: var(--ink-soft); line-height: 1.4;
+  }
+
+  /* レベル6の派生(0をたてる)カード: 紫アクセントで「6の仲間」感を出す */
+  .level-card.variant .lv-num { color: var(--purple); }
+  .level-card.variant.selected {
+    border-color: var(--purple);
+    box-shadow: 0 4px 0 var(--purple);
+    background: #f3eff8;
+  }
+  /* チャレンジカード: 金色アクセントで特別感を出す */
+  .level-card.challenge .lv-num { color: #e0a020; }
+  .level-card.challenge {
+    background: linear-gradient(160deg, #fffdf5, #fff6e0);
+    border-color: var(--yellow);
+    box-shadow: 0 4px 0 var(--yellow);
+  }
+  .level-card.challenge.selected {
+    border-color: #e0a020;
+    box-shadow: 0 4px 0 #e0a020;
+    background: linear-gradient(160deg, #fffaf0, #ffeec0);
+  }
+
+  .mode-row {
+    display: flex; gap: 2vw;
+    align-items: center; justify-content: center;
+  }
+  .mode-btn {
+    background: white; border: 2px solid var(--line);
+    border-radius: 1vw; padding: 1.6vh 2.5vw;
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(1rem, 1.4vw, 1.2rem);
+    color: var(--ink);
+    box-shadow: 0 3px 0 var(--line);
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 0.6em;
+  }
+  .mode-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+  .mode-btn.selected {
+    border-color: var(--blue);
+    box-shadow: 0 3px 0 var(--blue);
+    background: #eef5fb;
+  }
+  .mode-btn .icon { font-size: 1.4em; }
+
+  .start-btn {
+    background: var(--accent); color: white;
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(1.3rem, 2vw, 1.6rem);
+    padding: 1.8vh 5vw; border-radius: 999px;
+    box-shadow: 0 5px 0 #c46d2c, 0 10px 20px rgba(240, 138, 62, 0.3);
+    transition: all 0.15s; letter-spacing: 0.1em;
+  }
+  .start-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #c46d2c; }
+  .start-btn:disabled {
+    background: #c8d2dc; box-shadow: 0 5px 0 #a8b2bc; cursor: not-allowed;
+  }
+
+  /* ============ MAIN SCREEN ============ */
+  #mainScreen {
+    flex-direction: column;
+    padding: 1.5vh 2vw;
+    gap: 1vh;
+  }
+  .top-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 1vw; flex-shrink: 0;
+  }
+  .top-bar .left, .top-bar .right { display: flex; gap: 1vw; align-items: center; }
+  .pill {
+    background: white; border: 2px solid var(--line);
+    border-radius: 999px; padding: 0.6vh 1.2vw;
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.85rem, 1.1vw, 1rem);
+    color: var(--ink); display: flex; align-items: center; gap: 0.5em;
+  }
+  .pill .num { color: var(--accent); font-weight: 900; }
+  .icon-btn {
+    background: white; border: 2px solid var(--line);
+    border-radius: 50%;
+    width: clamp(40px, 5vh, 56px); height: clamp(40px, 5vh, 56px);
+    font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 0 var(--line); transition: all 0.1s;
+  }
+  .icon-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+  /* ============ ヒントボタン (計算スペース右上) ============ */
+  .hint-btn-container {
+    position: absolute;
+    top: 1.5vh;
+    right: 1.5vh;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3vh;
+    background: white;
+    border: 3px solid var(--yellow);
+    border-radius: 1.2vw;
+    padding: 1vh 1.4vw;
+    box-shadow: 0 4px 0 var(--yellow), 0 6px 16px rgba(245, 200, 66, 0.25);
+    cursor: pointer;
+    font-family: var(--font-display);
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    /* 「ここにあるよ」と存在感を出すため、常時ふんわり光る */
+    animation: hintIdleGlow 2.5s ease-in-out infinite;
+  }
+  .hint-btn-container:hover {
+    transform: translateY(-2px);
+  }
+  .hint-btn-container:active,
+  .hint-btn-container.pressing {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 var(--yellow);
+  }
+  .hint-btn-icon {
+    font-size: clamp(1.4rem, 3vh, 2rem);
+    line-height: 1;
+  }
+  .hint-btn-label {
+    font-size: clamp(0.7rem, 1.2vh, 0.9rem);
+    font-weight: 700;
+    color: #b8860b;
+    letter-spacing: 0.08em;
+  }
+  /* デフォルトの「ふんわり光る」アニメ */
+  @keyframes hintIdleGlow {
+    0%, 100% {
+      box-shadow: 0 4px 0 var(--yellow), 0 6px 16px rgba(245, 200, 66, 0.25);
+    }
+    50% {
+      box-shadow: 0 4px 0 var(--yellow), 0 6px 24px rgba(245, 200, 66, 0.55);
+    }
+  }
+  /* 計算ヒント有効中の active 状態 */
+  .hint-btn-container.active {
+    background: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 4px 0 #468055, 0 6px 16px rgba(90, 159, 107, 0.3);
+    animation: none;
+  }
+  .hint-btn-container.active .hint-btn-label {
+    color: white;
+  }
+  .hint-btn-container.active .hint-btn-icon {
+    filter: brightness(1.3);
+  }
+  /* 「ここを押して」と気づかせる強い点滅 */
+  .hint-btn-container.attention {
+    animation: hintAttention 0.9s ease-in-out infinite;
+    border-color: var(--green);
+  }
+  @keyframes hintAttention {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 4px 0 var(--green), 0 0 0 0 rgba(90, 159, 107, 0.7);
+    }
+    50% {
+      transform: scale(1.15);
+      box-shadow: 0 4px 0 var(--green), 0 0 0 16px rgba(90, 159, 107, 0);
+    }
+  }
+  /* 長押し中の青いリング */
+  .hint-btn-container.pressing::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 1.5vw;
+    border: 3px solid var(--blue);
+    opacity: 0.7;
+    pointer-events: none;
+    animation: longPressRing 0.5s linear forwards;
+  }
+  @keyframes longPressRing {
+    0%   { transform: scale(0.85); opacity: 0.4; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+
+  /* ============ スキップボタン (控えめ・ヒントボタンの左隣) ============ */
+  .skip-btn {
+    position: absolute;
+    top: 1.5vh;
+    /* ヒントボタン(右1.5vh)の左隣に置く。ヒントボタン幅+余白ぶん右から離す */
+    right: calc(1.5vh + 90px);
+    z-index: 6;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    padding: 0.6vh 1.1vw;
+    font-family: var(--font-ui);
+    font-size: clamp(0.7rem, 1.1vh, 0.85rem);
+    color: var(--ink-soft);
+    box-shadow: 0 2px 0 var(--line);
+    opacity: 0.55;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+  }
+  .skip-btn:hover { opacity: 0.95; }
+  .skip-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--line);
+    opacity: 1;
+  }
+
+  .main-body {
+    flex: 1;
+    display: grid;
+    /* 左(ひっ算)を広く、右(操作)はコンパクトに固定上限を設ける。
+       右ブロックが大きくなりすぎてひっ算が狭くなるのを防ぐ */
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 34vw, 460px);
+    gap: 2vw;
+    min-height: 0;
+  }
+
+  /* ============ LEFT: CALC PANEL (方眼ノート) ============ */
+  .calc-panel {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 1.5vw;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 0 var(--line);
+  }
+  /* 左の赤い縦ライン（ノートっぽさ） */
+  .calc-panel::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 8px;
+    background: linear-gradient(to bottom, var(--accent-2), var(--accent));
+    opacity: 0.6; z-index: 5;
+  }
+
+  /* 方眼背景のレイヤー: divisionと座標が完全一致するように、
+     JSでoffset(--gx, --gy)をdivisionの位置に合わせる */
+  .calc-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: var(--cell) var(--cell);
+    background-position: var(--gx, 0px) var(--gy, 0px);
+  }
+
+  /* ひっ算配置エリア（絶対座標、JSで位置調整） */
+  .division {
+    position: absolute;
+    /* topとleftはJSでマス単位に合わせて設定 */
+    z-index: 2;
+    /* 親(.calc-grid)が pointer-events:none のため、ここで明示的に有効化して
+       マス・小数点コマのタッチ/クリックを受け取れるようにする */
+    pointer-events: auto;
+  }
+
+  /* セル（方眼の1マス） */
+  .cell {
+    position: absolute;
+    width: var(--cell);
+    height: var(--cell);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-hand);
+    font-weight: 600;
+    font-size: calc(var(--cell) * 0.7);
+    color: var(--ink);
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+    line-height: 1;
+  }
+  .cell.spot {
+    background: rgba(245, 200, 66, 0.4);
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.7);
+  }
+  /* ヒント: 計算ソースとなる数字を緑のパルスで強調 */
+  .cell.hint-source,
+  .divisor-cell.hint-source {
+    color: var(--green) !important;
+    animation: hintPulse 1.4s ease-in-out infinite !important;
+    border-radius: 6px;
+    z-index: 3;
+  }
+  @keyframes hintPulse {
+    0%, 100% {
+      background: rgba(90, 159, 107, 0.15);
+      box-shadow: 0 0 0 2px rgba(90, 159, 107, 0.4);
+      transform: scale(1);
+    }
+    50% {
+      background: rgba(90, 159, 107, 0.35);
+      box-shadow: 0 0 0 4px rgba(90, 159, 107, 0.7);
+      transform: scale(1.08);
+    }
+  }
+  /* 演算記号ヒント (÷ × -) */
+  .op-hint {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: calc(var(--cell) * 0.5);
+    color: var(--green);
+    pointer-events: none;
+    z-index: 4;
+    background: white;
+    border: 2px solid var(--green);
+    border-radius: 50%;
+    width: calc(var(--cell) * 0.55);
+    height: calc(var(--cell) * 0.55);
+    box-shadow: 0 2px 8px rgba(90, 159, 107, 0.35);
+    animation: opHintIn 0.35s ease-out, opHintBounce 1.4s ease-in-out 0.35s infinite;
+  }
+  @keyframes opHintIn {
+    0%   { transform: scale(0) rotate(-90deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg);   opacity: 1; }
+  }
+  @keyframes opHintBounce {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.15); }
+  }
+  .cell.error {
+    animation: shake 0.5s, flashRed 0.6s 3;
+    color: var(--accent-2);
+  }
+  .cell.correct-pop {
+    animation: pop 0.4s;
+    color: var(--green);
+  }
+  .cell.fade-in {
+    animation: fadeIn 0.3s;
+  }
+  .cell.drop-anim {
+    animation: dropDown 0.6s cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  /* 中間計算の0を薄く表示 (例: 648÷2 で 6-6=0 のとき) */
+  .cell.faded {
+    color: var(--line);
+    opacity: 0.5;
+  }
+  /* わる数の余分な先頭0(例: 0.8→08.)を薄く表示 */
+  .divisor-cell.faded {
+    color: var(--line);
+    opacity: 0.45;
+  }
+  /* leadingZeroモードの商の先頭0: 薄く表示(入力直後)。fadedより少し見えるグレーに */
+  .cell.lead-zero {
+    color: var(--ink-soft);
+    opacity: 0.55;
+    position: relative;
+  }
+  /* 問題完了時: 斜線を引いて「消した」ことを示す */
+  .cell.lead-zero.struck::after {
+    content: "";
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 50%;
+    height: 3px;
+    background: var(--accent-2);
+    border-radius: 3px;
+    transform: rotate(-25deg);
+    transform-origin: center;
+    animation: strikeIn 0.35s ease-out forwards;
+  }
+  @keyframes strikeIn {
+    0%   { transform: rotate(-25deg) scaleX(0); opacity: 0; }
+    100% { transform: rotate(-25deg) scaleX(1); opacity: 1; }
+  }
+  /* 薄字(faded)の0は計算ソースとして扱わない (例: 「09÷3」と誤読されるのを防ぐ)
+     hint-sourceクラスが付いても、fadedの見た目を優先する */
+  .cell.faded.hint-source {
+    color: var(--line) !important;
+    opacity: 0.5 !important;
+    animation: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* divisor（わる数）+ ブラケット記号 */
+  .divisor-cell {
+    /* 数字部分 */
+    position: absolute;
+    width: var(--cell);
+    height: var(--cell);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-hand);
+    font-weight: 600;
+    font-size: calc(var(--cell) * 0.7);
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  /* ÷の役を果たすブラケット ")" の縦線 */
+  .bracket-line {
+    position: absolute;
+    width: 3px;
+    background: var(--ink);
+    border-radius: 3px;
+  }
+  /* 上線（商の下、わられる数の上） */
+  .top-bar-line {
+    position: absolute;
+    height: 3px;
+    background: var(--ink);
+    border-radius: 3px;
+  }
+  /* かけ算の結果の下の線 */
+  .sub-line {
+    position: absolute;
+    height: 3px;
+    background: var(--ink);
+    border-radius: 3px;
+  }
+
+  /* ============ 小数のわり算 用 ============ */
+  /* 小数点マーカー */
+  .dec-point {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--ink);
+    z-index: 5;
+  }
+  /* 操作中(=いま動かす)の小数点は赤で強調 */
+  .dec-point.active-pt {
+    background: var(--accent-2);
+    box-shadow: 0 0 0 3px rgba(232, 90, 79, 0.25);
+  }
+  /* 操作対象でない小数点は黒 */
+  .dec-point.inactive-pt { background: var(--ink); box-shadow: none; }
+  /* 商の小数点(確定): 黒。これ以上の操作が無いことを示す */
+  .dec-point.quotient-pt { background: var(--ink); box-shadow: none; }
+  .dec-point.pop-in { animation: ptPop 0.45s cubic-bezier(0.34, 1.4, 0.64, 1); }
+  /* スワイプで下から上がってくる演出 */
+  .dec-point.rise-in { animation: ptRise 0.4s ease-out; }
+  @keyframes ptRise {
+    0%   { transform: translateY(60px) scale(1.3); opacity: 0.4; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes ptPop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.6); }
+    100% { transform: scale(1); }
+  }
+
+  /* 「元の小数点を探す」点線赤丸 */
+  .find-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px dashed var(--accent-2);
+    background: rgba(232, 90, 79, 0.10);
+    z-index: 7;
+    cursor: pointer;
+    animation: stepPulse 1.1s ease-in-out infinite;
+  }
+  .find-circle.wrong-flash { animation: shake 0.5s; background: rgba(232,90,79,0.3); }
+
+  /* 商の小数点を打つ スワイプ用ハンドル/ガイド */
+  .swipe-handle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(232, 90, 79, 0.18);
+    border: 2px solid var(--accent-2);
+    z-index: 9;
+    cursor: grab;
+    touch-action: none;
+  }
+  .swipe-handle:active { cursor: grabbing; }
+
+  /* 小数点を右へ動かす 横スワイプ用ハンドル/ガイド */
+  .hswipe-handle {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(232, 90, 79, 0.18);
+    border: 2px solid var(--accent-2);
+    z-index: 9;
+    cursor: grab;
+    touch-action: none;
+  }
+  .hswipe-handle:active { cursor: grabbing; }
+  .hswipe-ghost {
+    position: absolute;
+    color: var(--accent-2);
+    opacity: 0.45;
+    font-weight: 900;
+    z-index: 6;
+    pointer-events: none;
+    animation: ghostSlide 1.2s ease-in-out infinite;
+  }
+  @keyframes ghostSlide {
+    0%, 100% { transform: translateX(0); opacity: 0.3; }
+    50%      { transform: translateX(6px); opacity: 0.6; }
+  }
+  .swipe-ghost {
+    position: absolute;
+    color: var(--accent-2);
+    opacity: 0.45;
+    font-weight: 900;
+    z-index: 6;
+    pointer-events: none;
+    animation: ghostBob 1.2s ease-in-out infinite;
+  }
+  @keyframes ghostBob {
+    0%, 100% { transform: translateY(0); opacity: 0.3; }
+    50%      { transform: translateY(-6px); opacity: 0.6; }
+  }
+
+  /* 「お皿矢印」(点を右下へ動かす弧の矢印) */
+  .move-arrow {
+    position: absolute;
+    color: var(--accent-2);
+    font-weight: 900;
+    z-index: 6;
+    pointer-events: none;
+    animation: arrowFly 1.1s ease-out forwards;
+    text-shadow: 0 2px 4px rgba(232, 90, 79, 0.3);
+  }
+  @keyframes arrowFly {
+    0%   { transform: translate(-6px, -6px) scale(0.6); opacity: 0; }
+    30%  { opacity: 1; }
+    70%  { transform: translate(0, 0) scale(1.15); opacity: 1; }
+    100% { transform: translate(0, 0) scale(1); opacity: 0; }
+  }
+
+  /* さわれる数字(小数点移動の対象)を強調 */
+  .cell.touchable, .divisor-cell.touchable {
+    cursor: pointer;
+    border-radius: 8px;
+    box-shadow: 0 0 0 3px rgba(74, 144, 200, 0.55);
+    background: rgba(74, 144, 200, 0.14);
+    animation: touchPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes touchPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(74, 144, 200, 0.5); }
+    50%      { box-shadow: 0 0 0 6px rgba(74, 144, 200, 0.18); }
+  }
+
+  /* 0補充・割り進みの0で、まだ出していない桁は隠す */
+  .cell.hidden-digit { opacity: 0; pointer-events: none; }
+  .cell.pop-in { animation: digitPop 0.5s cubic-bezier(0.34, 1.4, 0.64, 1); }
+  @keyframes digitPop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.25); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  /* 補った0は少しだけ控えめな色にして「もとからは無かった」ことを示す */
+  .cell.pad-zero:not(.hidden-digit),
+  .cell.extra-zero:not(.hidden-digit) { color: var(--blue); }
+
+  /* 商の小数点コマ(ドラッグ用) */
+  .point-piece {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 3px 8px rgba(232, 90, 79, 0.45), 0 0 0 4px rgba(232, 90, 79, 0.18);
+    z-index: 8;
+    cursor: grab;
+    touch-action: none;
+    animation: piecePulse 1.1s ease-in-out infinite;
+  }
+  @keyframes piecePulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.18); }
+  }
+  .point-piece.shake-err { animation: shake 0.5s; background: var(--accent-2); }
+  .point-piece.grabbing { cursor: grabbing; animation: none; transform: scale(1.25); }
+
+  /* 商マスの小数点スロット(タップ候補) */
+  .point-slot {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px dashed rgba(74, 144, 200, 0.55);
+    background: rgba(74, 144, 200, 0.08);
+    z-index: 7;
+    cursor: pointer;
+  }
+  .point-slot:active { background: rgba(74, 144, 200, 0.25); }
+
+  /* 小数点の移動ステップ円(数字の右下に出る点線円) */
+  .step-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px dashed rgba(74, 144, 200, 0.5);
+    background: transparent;
+    z-index: 7;
+  }
+  /* 次に押すべき円だけを目立たせてタッチ可能に */
+  .step-circle.active {
+    border-color: var(--accent-2);
+    background: rgba(232, 90, 79, 0.12);
+    cursor: pointer;
+    pointer-events: auto;
+    animation: stepPulse 1.1s ease-in-out infinite;
+  }
+  .step-circle:not(.active) { pointer-events: none; opacity: 0.5; }
+  @keyframes stepPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(232, 90, 79, 0.5); transform: scale(1); }
+    50%      { box-shadow: 0 0 0 6px rgba(232, 90, 79, 0); transform: scale(1.12); }
+  }
+
+
+  /* あまり表示タグ */
+  .remainder-tag {
+    position: absolute;
+    display: flex; align-items: center; gap: 0.4em;
+    font-family: var(--font-hand);
+    font-size: calc(var(--cell) * 0.4);
+    color: var(--ink-soft); white-space: nowrap;
+    z-index: 3;
+  }
+  .remainder-tag .label {
+    background: var(--paper-2); padding: 0.2em 0.5em;
+    border-radius: 6px;
+  }
+  .remainder-tag .value {
+    color: var(--accent); font-weight: 700;
+    min-width: 1.2em; text-align: center;
+  }
+
+  /* ============ 大きな赤丸（正解マーク） ============ */
+  .big-maru {
+    position: absolute;
+    /* 位置・サイズは JS(positionCorrectMark)で筆算を避けて動的に設定する。
+       下記はフォールバック値 */
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 10;
+    gap: 1vh;
+  }
+  .big-maru .maru-svg-wrap {
+    /* サイズは JS で配置領域に合わせて上書きする。下記はフォールバック */
+    width: 40vh;
+    max-width: 90%;
+    height: 40vh;
+    max-height: 90%;
+    animation: maruDraw 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  }
+  .big-maru svg {
+    width: 100%;
+    height: 100%;
+  }
+  .big-maru circle {
+    fill: none;
+    stroke: var(--maru-red);
+    stroke-width: 12;
+    stroke-linecap: round;
+    stroke-dasharray: 1200;
+    stroke-dashoffset: 1200;
+    animation: maruStroke 0.7s ease-out forwards;
+    filter: drop-shadow(0 4px 8px rgba(230, 57, 70, 0.3));
+  }
+  @keyframes maruDraw {
+    0%   { transform: scale(0.3) rotate(-30deg); opacity: 0; }
+    60%  { transform: scale(1.1) rotate(5deg);  opacity: 1; }
+    100% { transform: scale(1)   rotate(0deg);   opacity: 1; }
+  }
+  @keyframes maruStroke {
+    to { stroke-dashoffset: 0; }
+  }
+  .big-maru .seikai-text {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.5rem, 4.5vh, 2.6rem);
+    color: var(--maru-red);
+    background: white;
+    padding: 0.4em 1.2em;
+    border-radius: 999px;
+    border: 3px solid var(--maru-red);
+    box-shadow: 0 6px 0 #b32530, 0 10px 25px rgba(230, 57, 70, 0.3);
+    letter-spacing: 0.15em;
+    opacity: 0;
+    animation: textPop 0.4s 0.6s forwards;
+  }
+  @keyframes textPop {
+    0%   { transform: translateY(20px) scale(0.5); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* ============ ANIMATIONS ============ */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+  @keyframes flashRed {
+    0%, 100% { background: transparent; }
+    50% { background: rgba(232, 90, 79, 0.3); border-radius: 8px; }
+  }
+  @keyframes pop {
+    0%   { transform: scale(0.5); opacity: 0; }
+    60%  { transform: scale(1.2); }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dropDown {
+    0%   { transform: translateY(calc(var(--cell) * -3)); opacity: 0; }
+    60%  { transform: translateY(calc(var(--cell) * 0.2)); opacity: 1; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ============ RIGHT: CONTROLS ============ */
+  .controls {
+    display: flex; flex-direction: column;
+    gap: 2vh; min-height: 0;
+  }
+  /* フェーズ案内パネル(小数点を動かす手順の案内) */
+  .phase-guide-panel {
+    background: linear-gradient(160deg, #fffdf5, #fff6e6);
+    border: 2px solid var(--yellow);
+    border-radius: 1.5vw; padding: 2vh 1.5vw;
+    box-shadow: 0 4px 0 var(--yellow);
+    min-height: 9vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phase-guide {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(1rem, 1.5vw, 1.35rem);
+    color: var(--ink); text-align: center; line-height: 1.6;
+  }
+  .panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.5vh;
+  }
+  .panel-title {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--ink);
+  }
+  .step-hint {
+    font-family: var(--font-hand);
+    font-size: clamp(0.7rem, 0.9vw, 0.85rem); color: var(--ink-soft);
+  }
+  @keyframes pulse {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  .numpad-panel {
+    background: white; border: 2px solid var(--line);
+    border-radius: 1.5vw; padding: 2vh 1.5vw;
+    box-shadow: 0 4px 0 var(--line);
+    flex: 1; display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .numpad-panel.disabled .num-btn {
+    opacity: 0.35; cursor: not-allowed; pointer-events: none;
+  }
+  .numpad-panel.disabled { background: #f8f5ed; }
+  .numpad-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    /* 行の高さに上限を設け、縦に間延びさせない */
+    grid-template-rows: repeat(2, minmax(0, 15vh));
+    gap: 0.8vw;
+    min-height: 0;
+    align-content: center;
+  }
+  .num-btn {
+    background: white; border: 3px solid var(--line);
+    border-radius: 1vw;
+    font-family: var(--font-hand); font-weight: 600;
+    font-size: clamp(1.8rem, 4vh, 2.8rem);
+    color: var(--ink);
+    box-shadow: 0 4px 0 var(--line);
+    transition: all 0.08s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .numpad-panel:not(.disabled) .num-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 var(--accent);
+    background: #fff8ef;
+  }
+  .num-btn.wrong {
+    animation: shake 0.5s;
+    background: #fde8e6;
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+  }
+
+  /* ============ NEXT BUTTON (大きな次へ) ============ */
+  .next-q-btn {
+    position: absolute;
+    bottom: 4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(1.2rem, 2.2vh, 1.6rem);
+    padding: 1.8vh 4vw;
+    border-radius: 999px;
+    box-shadow: 0 5px 0 #c46d2c, 0 10px 25px rgba(240, 138, 62, 0.4);
+    z-index: 20;
+    letter-spacing: 0.08em;
+    display: none;
+    animation: nextBtnIn 0.5s 0.8s both;
+  }
+  .next-q-btn:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 2px 0 #c46d2c; }
+  .next-q-btn.show { display: block; }
+  @keyframes nextBtnIn {
+    from { transform: translateX(-50%) translateY(40px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  }
+
+  /* ============ MODAL ============ */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(44, 58, 74, 0.6);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; backdrop-filter: blur(3px);
+  }
+  .modal-overlay.active { display: flex; animation: fadeIn 0.2s; }
+  .modal {
+    background: var(--paper); border-radius: 2vw;
+    padding: 3vh 3vw;
+    max-width: 92vw; max-height: 92vh;
+    box-shadow: 0 20px 60px var(--shadow-deep);
+    position: relative; animation: pop 0.3s;
+  }
+  .modal-close {
+    position: absolute; top: -1vh; right: -1vh;
+    width: 5vh; height: 5vh;
+    background: var(--accent-2); color: white;
+    border-radius: 50%; font-size: 2.5vh; font-weight: 900;
+    box-shadow: 0 4px 12px var(--shadow);
+  }
+  .modal-title {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(1.4rem, 2.5vh, 2rem);
+    text-align: center; color: var(--ink); margin-bottom: 2vh;
+  }
+  .modal-title .deco { color: var(--accent); }
+  /* モーダル下部の使い方説明 */
+  .modal-hint-note {
+    margin-top: 2vh;
+    text-align: center;
+    font-family: var(--font-hand);
+    font-size: clamp(0.75rem, 1.4vh, 0.95rem);
+    color: var(--ink-soft);
+    background: var(--paper-2);
+    padding: 1vh 2vw;
+    border-radius: 999px;
+    border: 1px dashed var(--line);
+  }
+  .kuku-table {
+    display: grid;
+    grid-template-columns: auto repeat(9, 1fr);
+    gap: 2px; background: var(--ink);
+    border-radius: 1vw; overflow: hidden; padding: 2px;
+  }
+  .kuku-cell {
+    background: white; padding: 0.6vh 0.4vw;
+    text-align: center; font-family: var(--font-hand);
+    font-size: clamp(0.85rem, 1.4vh, 1.1rem);
+    color: var(--ink); font-weight: 600;
+  }
+  .kuku-header {
+    background: var(--accent); color: white;
+    font-family: var(--font-display); font-weight: 900;
+  }
+  .kuku-row-header {
+    background: var(--blue); color: white;
+    font-family: var(--font-display); font-weight: 900;
+  }
+
+  /* ============ CALCULATOR MODAL ============ */
+  .calc-modal { width: min(92vw, 360px); }
+  /* いま計算している式の案内ボタン */
+  .calc-now {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.95rem, 2vh, 1.2rem);
+    color: var(--ink);
+    background: #eef5fb;
+    border: 2px solid var(--blue);
+    border-radius: 999px;
+    padding: 1vh 2vw;
+    text-align: center;
+    margin-bottom: 1.6vh;
+    box-shadow: 0 3px 0 var(--blue);
+    transition: all 0.15s;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .calc-now:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--blue); }
+  .calc-now.empty {
+    background: var(--paper-2);
+    border-color: var(--line);
+    box-shadow: 0 3px 0 var(--line);
+    color: var(--ink-soft);
+    cursor: default;
+  }
+  .calc-now.empty:active { transform: none; box-shadow: 0 3px 0 var(--line); }
+  /* 電卓の表示画面 */
+  .calc-display {
+    background: var(--ink);
+    color: #eafff0;
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(1.8rem, 4.5vh, 2.8rem);
+    text-align: right;
+    padding: 1.4vh 3vw;
+    border-radius: 1.5vw;
+    margin-bottom: 1.6vh;
+    min-height: 1.4em;
+    overflow-x: auto;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+  }
+  /* ボタングリッド */
+  .calc-keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: clamp(6px, 1.2vh, 12px);
+  }
+  .calc-key {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(1.2rem, 3vh, 1.7rem);
+    color: var(--ink);
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 1.2vw;
+    padding: 1.4vh 0;
+    box-shadow: 0 3px 0 var(--line);
+    transition: all 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .calc-key:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+  .calc-op {
+    color: white; background: var(--blue);
+    border-color: var(--blue); box-shadow: 0 3px 0 #3a72a0;
+  }
+  .calc-op:active { box-shadow: 0 1px 0 #3a72a0; }
+  .calc-fn {
+    color: white; background: var(--ink-soft);
+    border-color: var(--ink-soft); box-shadow: 0 3px 0 #45525f;
+  }
+  .calc-fn:active { box-shadow: 0 1px 0 #45525f; }
+  .calc-eq {
+    color: white; background: var(--accent);
+    border-color: var(--accent); box-shadow: 0 3px 0 #c46d2c;
+    grid-row: span 2;
+  }
+  .calc-eq:active { box-shadow: 0 1px 0 #c46d2c; }
+  .calc-zero { grid-column: span 2; }
+
+  /* ============ CHALLENGE METHOD MODAL ============ */
+  .method-modal { max-width: 640px; text-align: center; }
+  .method-q {
+    font-family: var(--font-hand);
+    font-size: clamp(1rem, 2.2vh, 1.3rem);
+    color: var(--ink); line-height: 1.7;
+    margin-bottom: 2vh;
+  }
+  .method-example {
+    display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: center;
+    gap: 0.6em;
+    font-family: var(--font-hand);
+    font-size: clamp(0.8rem, 1.6vh, 1rem);
+    background: white;
+    border: 2px dashed var(--line);
+    border-radius: 1vw;
+    padding: 1.4vh 2vw;
+    margin-bottom: 2.5vh;
+  }
+  .method-example-label {
+    background: var(--accent); color: white;
+    font-family: var(--font-display); font-weight: 900;
+    border-radius: 999px; padding: 0.2em 0.8em;
+    font-size: 0.85em;
+  }
+  .method-example-yes { color: var(--purple); font-weight: 700; }
+  .method-example-no  { color: var(--blue);   font-weight: 700; }
+  .method-example-vs  { color: var(--ink-soft); }
+  .method-btn-row {
+    display: flex; gap: 3vw;
+    align-items: stretch; justify-content: center;
+  }
+  .method-btn {
+    flex: 1; max-width: 220px;
+    background: white; border: 3px solid var(--line);
+    border-radius: 1.4vw; padding: 2.4vh 1vw;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 0.6vh;
+    box-shadow: 0 5px 0 var(--line);
+    transition: all 0.15s;
+    font-family: var(--font-display);
+  }
+  .method-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--line); }
+  .method-btn .method-btn-icon { font-size: clamp(1.8rem, 4vh, 2.6rem); line-height: 1; }
+  .method-btn .method-btn-label {
+    font-weight: 900; font-size: clamp(1.1rem, 2.4vh, 1.5rem);
+    letter-spacing: 0.08em;
+  }
+  .method-btn .method-btn-sub {
+    font-family: var(--font-hand);
+    font-size: clamp(0.7rem, 1.4vh, 0.9rem);
+    color: var(--ink-soft);
+  }
+  .method-btn.yes { color: var(--purple); }
+  .method-btn.yes:hover { border-color: var(--purple); box-shadow: 0 5px 0 var(--purple); background: #f3eff8; }
+  .method-btn.no { color: var(--blue); }
+  .method-btn.no:hover { border-color: var(--blue); box-shadow: 0 5px 0 var(--blue); background: #eef5fb; }
+
+  @media (max-width: 599px) {
+    .method-modal { max-width: 94vw; }
+    .method-btn-row { gap: 4vw; }
+    .method-btn { padding: 2vh 2vw; border-radius: 3vw; }
+  }
+
+  /* ============ RESULT SCREEN ============ */
+  #resultScreen {
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 4vh 4vw; gap: 3vh;
+  }
+  .result-card {
+    background: white; border-radius: 2vw;
+    padding: 5vh 8vw;
+    box-shadow: 0 8px 0 var(--line), 0 20px 40px var(--shadow);
+    text-align: center; border: 3px solid var(--accent);
+    position: relative;
+  }
+  .result-emoji {
+    font-size: clamp(4rem, 12vh, 7rem);
+    line-height: 1; margin-bottom: 2vh;
+    animation: bounce 1.5s infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+  }
+  .result-title {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(2rem, 4vh, 3rem);
+    color: var(--ink); margin-bottom: 1vh;
+  }
+  .result-score {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(2.5rem, 6vh, 4rem);
+    color: var(--accent); margin: 2vh 0;
+  }
+  .result-score small { font-size: 0.5em; color: var(--ink-soft); }
+  .result-msg {
+    font-family: var(--font-hand);
+    font-size: clamp(1rem, 1.8vh, 1.3rem);
+    color: var(--ink-soft); margin-bottom: 3vh;
+  }
+  .result-buttons {
+    display: flex; gap: 2vw; justify-content: center;
+  }
+  .result-btn {
+    background: white; border: 3px solid var(--line);
+    color: var(--ink); font-family: var(--font-display);
+    font-weight: 700; font-size: clamp(1rem, 1.6vh, 1.2rem);
+    padding: 1.5vh 2.5vw; border-radius: 999px;
+    box-shadow: 0 4px 0 var(--line);
+    transition: all 0.15s;
+  }
+  .result-btn.primary {
+    background: var(--accent); color: white;
+    border-color: var(--accent);
+    box-shadow: 0 4px 0 #c46d2c;
+  }
+  .result-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--line); }
+  .result-btn.primary:active { box-shadow: 0 2px 0 #c46d2c; }
+
+  .confetti {
+    position: fixed; pointer-events: none;
+    inset: 0; overflow: hidden; z-index: 50;
+  }
+  .confetti-piece {
+    position: absolute; width: 12px; height: 12px;
+    opacity: 0.9; animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall {
+    0% { transform: translateY(-100vh) rotate(0deg); }
+    100% { transform: translateY(110vh) rotate(720deg); }
+  }
+
+  /* 中間サイズ(タブレット等): 横向きは横並びのまま操作ブロックを少し狭める。
+     縦向きのときだけ縦積みにする(横幅が足りないため) */
+  @media (max-width: 1100px) and (orientation: landscape) {
+    .main-body {
+      grid-template-columns: minmax(0, 1fr) clamp(260px, 30vw, 380px);
+      gap: 1.5vw;
+    }
+  }
+  @media (max-width: 900px) and (orientation: portrait) {
+    .main-body {
+      grid-template-columns: 1fr;
+      display: flex;
+      flex-direction: column;
+    }
+    .level-grid { grid-template-columns: repeat(3, 1fr); }
+    /* ひっ算を上部にしっかり確保し、操作ブロックは下に。
+       ひっ算が潰れて文字が小さくなるのを防ぐ */
+    .calc-panel { flex: 0 0 46vh; min-height: 46vh; }
+    .controls { flex: 1 1 auto; }
+  }
+  @media (max-width: 900px) and (orientation: landscape) {
+    .level-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  /* ============ スマホ縦長対応 ============ */
+  @media (max-width: 599px) {
+
+    /* タイトル画面: 中央寄せをやめ、上から並べてスクロールできるようにする
+       (コンテンツが画面より高いと中央寄せでは上端が切れてしまうため) */
+    #titleScreen {
+      justify-content: flex-start;
+      padding: 2.5vh 4vw calc(2.5vh + env(safe-area-inset-bottom, 0px));
+      gap: 1.6vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .title-header { flex-shrink: 0; }
+    .app-title {
+      font-size: clamp(1.3rem, 6.5vw, 2rem);
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+    }
+    .app-title::before, .app-title::after { display: none; }
+    .app-subtitle { font-size: 0.8rem; margin-top: 0.2em; }
+    .section-label { font-size: 0.9rem; margin-bottom: 0.6vh; }
+    .level-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 2vw; width: 96vw;
+    }
+    /* カードは内容に合わせた高さにして、縦の間延びを防ぐ */
+    .level-card {
+      min-height: 0; padding: 1.2vh 1.5vw;
+      border-radius: 3vw; gap: 0.3vh;
+    }
+    .level-card .lv-num { font-size: clamp(1.3rem, 5.5vw, 1.8rem); }
+    .level-card .lv-num small { font-size: 0.4em; margin-bottom: 0.15em; }
+    .level-card .lv-num .lv-sub { font-size: 0.3em; padding: 0.2em 0.5em; margin-top: 0.25em; }
+    .level-card .lv-title { font-size: clamp(0.8rem, 3.5vw, 0.95rem); }
+    .level-card .lv-desc { font-size: 0.68rem; line-height: 1.3; }
+    .mode-row { gap: 3vw; }
+    .mode-btn { padding: 1.2vh 4vw; font-size: 0.85rem; }
+    .start-btn {
+      font-size: 1.1rem; padding: 1.4vh 8vw;
+      flex-shrink: 0;
+    }
+
+    /* メイン画面: 縦積みに変更 */
+    #mainScreen {
+      padding: 1vh 2vw;
+      gap: 1vh;
+    }
+
+    /* トップバーをコンパクトに */
+    .top-bar { padding: 0 0.5vw; }
+    .pill { padding: 0.5vh 2.5vw; font-size: 0.78rem; }
+    .icon-btn {
+      width: 36px; height: 36px;
+      font-size: 1rem;
+    }
+
+    /* メインボディ: ひっ算(上) → コントロール(下) の縦積み */
+    .main-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+    }
+
+    /* ひっ算エリアは上部に固定高さ。見やすさのため少し広げる */
+    .calc-panel {
+      flex: 0 0 44vh;
+      min-height: 44vh;
+      border-radius: 3vw;
+    }
+
+    /* スマホ縦: ヒントボタンを少し小さく */
+    .hint-btn-container {
+      top: 1vh;
+      right: 1vh;
+      padding: 0.7vh 2vw;
+      border-radius: 2.5vw;
+      border-width: 2px;
+      gap: 0.1vh;
+    }
+    .hint-btn-icon { font-size: 1.2rem; }
+    .hint-btn-label { font-size: 0.65rem; }
+
+    /* スマホ縦: スキップボタンも合わせて小さく */
+    .skip-btn {
+      top: 1vh;
+      right: calc(1vh + 64px);
+      padding: 0.5vh 2vw;
+      font-size: 0.65rem;
+    }
+
+    /* コントロールエリア */
+    .controls {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+      min-height: 0;
+    }
+
+    /* フェーズ案内パネル */
+    .phase-guide-panel {
+      border-radius: 3vw;
+      padding: 1vh 2.5vw;
+      min-height: 7vh;
+    }
+    .phase-guide { font-size: 0.95rem; line-height: 1.5; }
+    .panel-header { margin-bottom: 0.8vh; }
+    .panel-title { font-size: 0.82rem; }
+    .step-hint { font-size: 0.7rem; }
+
+    /* テンキーパネル */
+    .numpad-panel {
+      flex: 1;
+      border-radius: 3vw;
+      padding: 1.2vh 2.5vw;
+      min-height: 0;
+    }
+    .numpad-grid { gap: 1.5vw; }
+    .num-btn {
+      border-radius: 2.5vw;
+      border-width: 2px;
+      box-shadow: 0 3px 0 var(--line);
+      font-size: clamp(1.4rem, 6vw, 2rem);
+    }
+
+    /* 次の問題へボタン */
+    .next-q-btn {
+      font-size: 1rem;
+      padding: 1.4vh 6vw;
+      bottom: 2vh;
+    }
+
+    /* リザルト画面 */
+    #resultScreen { padding: 3vh 4vw; gap: 2vh; }
+    .result-card { padding: 4vh 6vw; border-radius: 4vw; }
+    .result-emoji { font-size: 4rem; }
+    .result-title { font-size: 1.6rem; }
+    .result-score { font-size: 2.4rem; }
+    .result-msg { font-size: 0.9rem; }
+    .result-buttons { gap: 3vw; }
+    .result-btn { font-size: 0.9rem; padding: 1.2vh 4vw; }
+
+    /* モーダル（九九表）: スクロール可能に */
+    .modal { padding: 2vh 3vw; border-radius: 4vw; overflow-y: auto; max-height: 85vh; }
+    .kuku-cell { padding: 0.5vh 0.3vw; font-size: 0.75rem; }
+
+    /* 赤丸のサイズ調整 */
+    .big-maru .maru-svg-wrap { width: 38vh; height: 38vh; }
+    .big-maru .seikai-text { font-size: 1.2rem; }
+  }
+
+  /* ============ スマホ横向き対応 ============ */
+  @media (max-height: 480px) and (orientation: landscape) {
+    #mainScreen { padding: 0.5vh 1.5vw; gap: 0.5vh; }
+    .top-bar .pill { padding: 0.3vh 1.5vw; font-size: 0.72rem; }
+    .icon-btn { width: 30px; height: 30px; font-size: 0.85rem; }
+
+    .main-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5vw;
+    }
+    .calc-panel { flex: unset; min-height: unset; }
+    .controls { gap: 0.8vh; }
+
+    .phase-guide-panel { padding: 0.7vh 1.5vw; min-height: 6vh; }
+    .phase-guide { font-size: 0.8rem; line-height: 1.4; }
+    .panel-header { margin-bottom: 0.4vh; }
+    .panel-title { font-size: 0.75rem; }
+    .step-hint { display: none; }  /* 横向き狭い時は省略 */
+
+    .numpad-panel { padding: 0.8vh 1.5vw; }
+    .num-btn { font-size: clamp(1.2rem, 4.5vw, 1.6rem); }
+    .numpad-grid { gap: 0.6vw; }
+
+    /* スマホ横向き: ヒントボタンを小さく */
+    .hint-btn-container {
+      top: 0.5vh;
+      right: 0.5vh;
+      padding: 0.4vh 1.2vw;
+      border-width: 2px;
+      border-radius: 1.5vw;
+      gap: 0;
+    }
+    .hint-btn-icon { font-size: 1rem; }
+    .hint-btn-label { font-size: 0.6rem; }
+
+    /* スマホ横向き: スキップボタンも小さく */
+    .skip-btn {
+      top: 0.5vh;
+      right: calc(0.5vh + 56px);
+      padding: 0.4vh 1.2vw;
+      font-size: 0.6rem;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TITLE SCREEN ============ -->
+<div id="titleScreen" class="screen active">
+  <div class="title-header">
+    <h1 class="app-title">小数の<span class="accent">わり算</span>ひっ算</h1>
+    <p class="app-subtitle">〜 小数点を うごかして けいさん 〜</p>
+    <p class="app-version">v5</p>
+  </div>
+
+  <div>
+    <div class="section-label"><span class="deco">1.</span> レベルを えらぼう</div>
+    <div class="level-grid" id="levelGrid"></div>
+  </div>
+
+  <div>
+    <div class="section-label"><span class="deco">2.</span> モードを えらぼう</div>
+    <div class="mode-row">
+      <button class="mode-btn selected" data-mode="fixed">
+        <span class="icon">📚</span><span>こていもんだい</span>
+      </button>
+      <button class="mode-btn" data-mode="random">
+        <span class="icon">🎲</span><span>ランダムもんだい</span>
+      </button>
+    </div>
+  </div>
+
+  <button class="start-btn" id="startBtn" disabled>はじめる →</button>
+</div>
+
+
+<!-- ============ MAIN SCREEN ============ -->
+<div id="mainScreen" class="screen">
+  <div class="top-bar">
+    <div class="left">
+      <button class="icon-btn" id="backBtn" title="タイトルへ もどる">↩</button>
+      <div class="pill">レベル <span class="num" id="levelDisplay">1</span></div>
+      <div class="pill">もんだい <span class="num" id="qNumDisplay">1</span> / <span id="qTotalDisplay">5</span></div>
+    </div>
+    <div class="right">
+      <div class="pill">⭕ <span class="num" id="correctDisplay">0</span></div>
+    </div>
+  </div>
+
+  <div class="main-body">
+    <div class="calc-panel" id="calcPanel">
+      <div class="calc-grid" id="calcGrid">
+        <div class="division" id="division"></div>
+      </div>
+      <!-- スキップボタン (ヒントボタンの左隣・控えめ) -->
+      <button class="skip-btn" id="skipBtn" title="この もんだいを スキップ">スキップ →</button>
+      <!-- ヒントボタン (計算スペース右上) -->
+      <button class="hint-btn-container" id="hintBtn" title="タップ:けいさんき / 長押し:くくひょう">
+        <span class="hint-btn-icon">💡</span>
+        <span class="hint-btn-label">ヒント</span>
+      </button>
+      <!-- 大きな赤丸（正解時に表示） -->
+      <div class="big-maru" id="bigMaru" style="display:none;">
+        <div class="maru-svg-wrap">
+          <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+            <circle cx="200" cy="200" r="170"></circle>
+          </svg>
+        </div>
+        <div class="seikai-text">せいかい！</div>
+      </div>
+      <!-- 次の問題へボタン -->
+      <button class="next-q-btn" id="nextQBtn">つぎの もんだいへ →</button>
+    </div>
+
+    <div class="controls">
+      <div class="phase-guide-panel">
+        <div class="phase-guide" id="phaseGuide"></div>
+      </div>
+
+      <div class="numpad-panel disabled" id="numpadPanel">
+        <div class="panel-header">
+          <div class="panel-title">すうじを いれよう</div>
+          <div class="step-hint" id="numHint">小数点を うごかしてね</div>
+        </div>
+        <div class="numpad-grid">
+          <button class="num-btn" data-num="1">1</button>
+          <button class="num-btn" data-num="2">2</button>
+          <button class="num-btn" data-num="3">3</button>
+          <button class="num-btn" data-num="4">4</button>
+          <button class="num-btn" data-num="5">5</button>
+          <button class="num-btn" data-num="6">6</button>
+          <button class="num-btn" data-num="7">7</button>
+          <button class="num-btn" data-num="8">8</button>
+          <button class="num-btn" data-num="9">9</button>
+          <button class="num-btn" data-num="0">0</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============ RESULT SCREEN ============ -->
+<div id="resultScreen" class="screen">
+  <div class="confetti" id="confetti"></div>
+  <div class="result-card">
+    <div class="result-emoji" id="resultEmoji">🎉</div>
+    <div class="result-title" id="resultTitle">よくできました！</div>
+    <div class="result-score">
+      <span id="resultCorrect">0</span><small> / </small><span id="resultTotal">5</span>
+      <small style="display:block; margin-top:0.5vh">もんだい せいかい</small>
+    </div>
+    <div class="result-msg" id="resultMsg">この ちょうしで がんばろう！</div>
+    <div class="result-buttons">
+      <button class="result-btn" id="resultHomeBtn">タイトルへ</button>
+      <button class="result-btn primary" id="resultRetryBtn">もういちど</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============ HINT MODAL ============ -->
+<div class="modal-overlay" id="hintModal">
+  <div class="modal">
+    <button class="modal-close" id="hintCloseBtn">×</button>
+    <div class="modal-title"><span class="deco">★</span> くくひょう <span class="deco">★</span></div>
+    <div class="kuku-table" id="kukuTable"></div>
+    <div class="modal-hint-note">💡 タップ:けいさん 　長押し:くくひょう</div>
+  </div>
+</div>
+
+
+<!-- ============ CALCULATOR MODAL ============ -->
+<div class="modal-overlay" id="calcModal">
+  <div class="modal calc-modal">
+    <button class="modal-close" id="calcCloseBtn">×</button>
+    <div class="modal-title"><span class="deco">🧮</span> けいさんき <span class="deco">🧮</span></div>
+    <!-- いま計算している式の案内 -->
+    <div class="calc-now" id="calcNow">いまの けいさん</div>
+    <!-- 電卓の画面 -->
+    <div class="calc-display" id="calcDisplay">0</div>
+    <!-- ボタン -->
+    <div class="calc-keys">
+      <button class="calc-key calc-fn" data-act="clear">C</button>
+      <button class="calc-key calc-fn" data-act="back">⌫</button>
+      <button class="calc-key calc-op" data-op="/">÷</button>
+      <button class="calc-key calc-op" data-op="*">×</button>
+
+      <button class="calc-key" data-d="7">7</button>
+      <button class="calc-key" data-d="8">8</button>
+      <button class="calc-key" data-d="9">9</button>
+      <button class="calc-key calc-op" data-op="-">−</button>
+
+      <button class="calc-key" data-d="4">4</button>
+      <button class="calc-key" data-d="5">5</button>
+      <button class="calc-key" data-d="6">6</button>
+      <button class="calc-key calc-op" data-op="+">＋</button>
+
+      <button class="calc-key" data-d="1">1</button>
+      <button class="calc-key" data-d="2">2</button>
+      <button class="calc-key" data-d="3">3</button>
+      <button class="calc-key calc-eq" data-act="equals" rowspan2>＝</button>
+
+      <button class="calc-key calc-zero" data-d="0">0</button>
+      <button class="calc-key" data-d=".">.</button>
+    </div>
+    <div class="modal-hint-note">💡 「いまの けいさん」を おしたら、いまの しきが はいるよ</div>
+  </div>
+</div>
+
+
+
+<script>
+/* ============================================================
+   わりざんのひっ算アプリ - 改修版
+   ============================================================ */
+
+/* ---------- LEVEL DEFINITIONS (小数のわり算 類型1〜4) ----------
+   各問題は [被除数(文字列), 除数(文字列), 出題元レベル] で表す。
+   文字列に小数点を含めることで、表示上の小数点をそのまま再現する。
+   - randomGen は [被除数, 除数] の文字列ペアを返す。
+
+   レベルの意図 (内部キー : 表示):
+   1 : 類型1   整数 ÷ 整数 → 商が小数(割り切れる)。割り進み・小数点を打つ。
+   2 : 類型2   小数 ÷ 整数 → 小数点の打ち上げのみ。
+   3 : 類型3   小数 ÷ 小数 → 小数点の移動(基本)。
+   4 : 類型4   小数 ÷ 小数 → 0を補う小数点移動。
+   (類型5 余りのある割り算は次回実装)
+*/
+const LEVELS = {
+  1: {
+    title: 'レベル 1',
+    desc: 'せいすう ÷ せいすう\n商が小数になる',
+    badge: '1',
+    decimal: true,
+    fixed: [
+      ['2', '5'],   // 0.4
+      ['6', '4'],   // 1.5
+      ['3', '2'],   // 1.5
+      ['9', '4'],   // 2.25
+      ['7', '5']    // 1.4
+    ],
+    randomGen: () => {
+      // 整数 ÷ 整数、割り切れて商が小数(1〜2桁)、割り切れない(商が整数でない)
+      while (true) {
+        const divisor = rand(2, 8);
+        const dividend = rand(2, 30);
+        if (dividend % divisor === 0) continue;       // 商が整数なら除外
+        if (!terminates(dividend, divisor, 2)) continue; // 2桁以内で割り切れる
+        return [String(dividend), String(divisor)];
+      }
+    }
+  },
+  2: {
+    title: 'レベル 2',
+    desc: '小数 ÷ せいすう\n小数点を打ち上げ',
+    badge: '2',
+    decimal: true,
+    fixed: [
+      ['8.4', '4'],  // 2.1
+      ['1.2', '3'],  // 0.4
+      ['9.6', '8'],  // 1.2
+      ['7.5', '5'],  // 1.5
+      ['2.8', '4']   // 0.7
+    ],
+    randomGen: () => {
+      // 小数(小数第1位) ÷ 整数、割り切れる
+      while (true) {
+        const divisor = rand(2, 8);
+        const tenths = rand(11, 99);          // 1.1〜9.9 を 10倍した整数
+        const dividend = tenths / 10;
+        if (tenths % divisor === 0) {         // ぴったり割り切れる(小数第1位で完了)
+          return [dividend.toFixed(1), String(divisor)];
+        }
+      }
+    }
+  },
+  3: {
+    title: 'レベル 3',
+    desc: '小数 ÷ 小数\n小数点の いどう',
+    badge: '3',
+    decimal: true,
+    fixed: [
+      ['2.4', '0.8'],  // 3
+      ['7.2', '1.2'],  // 6
+      ['9.2', '0.4'],  // 23
+      ['6.3', '0.7'],  // 9
+      ['4.8', '0.6']   // 8
+    ],
+    randomGen: () => {
+      // 小数(第1位) ÷ 小数(第1位)。小数点を1つ右に動かすと両方とも整数になる
+      // (=被除数に0を補う必要がない)。割り切れる。
+      while (true) {
+        const divT = rand(2, 9);              // 0.2〜0.9
+        const ans = rand(2, 30);
+        const divT2 = divT;
+        const dividendT = ans * divT2;        // 被除数×10
+        if (dividendT < 10 || dividendT > 99) continue; // 被除数を1.0〜9.9に収める
+        const dividend = dividendT / 10;
+        const divisor = divT / 10;
+        return [dividend.toFixed(1), divisor.toFixed(1)];
+      }
+    }
+  },
+  4: {
+    title: 'レベル 4',
+    desc: '小数 ÷ 小数\n0を おぎなう',
+    badge: '4',
+    decimal: true,
+    fixed: [
+      ['6', '0.15'],   // 40
+      ['2.4', '0.08'], // 30
+      ['9', '0.36'],   // 25
+      ['4.2', '0.06'], // 70
+      ['3', '0.12']    // 25
+    ],
+    randomGen: () => {
+      // 除数は小数第2位(0.0X 形式)。小数点を2つ動かすと、被除数の桁が足りず
+      // 右に0を補う必要があるパターン(被除数は整数 or 小数第1位)。割り切れる。
+      while (true) {
+        const divH = rand(2, 49);             // 0.02〜0.49 を 100倍した整数
+        if (divH % 10 === 0) continue;        // 0.10,0.20…(実質1桁)は除外
+        const divisor = divH / 100;
+        // 被除数は整数 or 小数第1位(=小数点を2つ動かすと0補充が必要)
+        const dividendInt = rand(1, 9);
+        const useTenth = (Math.random() < 0.5);
+        const dividend = useTenth ? (dividendInt + rand(1, 9) / 10) : dividendInt;
+        // 小数点2つ移動後の整数同士で割り切れるか
+        const a = Math.round(dividend * 100);
+        if (a % divH !== 0) continue;
+        const ans = a / divH;
+        if (ans < 2 || ans > 99) continue;
+        return [useTenth ? dividend.toFixed(1) : String(dividend), divisor.toFixed(2)];
+      }
+    }
+  },
+  5: {
+    title: 'レベル 5',
+    desc: '小数 ÷ せいすう\nあまりを 出す',
+    badge: '5',
+    decimal: true,
+    challenge: true,
+    stopPlaces: 1,   // 小数第1位まで わって あまりを出す
+    fixed: [
+      ['7.6', '3'],   // 2.5 あまり 0.1
+      ['9.4', '7'],   // 1.3 あまり 0.3
+      ['8.5', '6'],   // 1.4 あまり 0.1
+      ['25.3', '4'],  // 6.3 あまり 0.1
+      ['5',   '3']    // 1.6 あまり 0.2
+    ],
+    randomGen: () => {
+      // 小数(第1位)or整数 ÷ 整数。小数第1位まで割って「あまり(0でない)」が出る
+      while (true) {
+        const divisor = rand(3, 9);
+        const useTenth = (Math.random() < 0.7);
+        const dividendInt = rand(1, 30);
+        const dividend = useTenth ? (dividendInt + rand(0, 9) / 10) : dividendInt;
+        // 小数第1位まで(=10倍した整数を割る)
+        const scaled = Math.round(dividend * 10);
+        const rem = scaled % divisor;       // 小数第1位での あまり(10倍スケール)
+        if (rem === 0) continue;            // 割り切れたら除外(あまりを出したい)
+        const q = Math.floor(scaled / divisor);
+        if (q < 10 || q > 999) continue;    // 商 1.0〜99.9 に収める
+        return [useTenth ? dividend.toFixed(1) : String(dividend), String(divisor)];
+      }
+    }
+  }
+};
+
+const QUESTIONS_PER_LEVEL = 5;
+
+/* 与えられた a/b が小数 maxPlaces 桁以内で割り切れるか */
+function terminates(a, b, maxPlaces) {
+  let r = a % b;
+  for (let i = 0; i < maxPlaces; i++) {
+    if (r === 0) return true;
+    r = (r * 10) % b;
+  }
+  return r === 0;
+}
+
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+/* ---------- GAME STATE ---------- */
+const state = {
+  level: null,
+  mode: 'fixed',
+  questions: [],
+  qIdx: 0,
+  correctCount: 0,
+  current: null
+};
+
+/* ---------- STEP COMPUTATION ---------- */
+/* ============================================================
+   DECIMAL ANALYSIS
+   小数のわり算を「ひっ算でどう並べ・どう動かすか」に変換する。
+
+   入力: dividendStr ("9.2" / "6" など), divisorStr ("0.3" / "4" など)
+   出力(decimal info):
+   - divisorDigits     : 表示するわる数の数字列(小数点抜き) 例 "0.3" -> ['0','3']
+   - divisorPointBefore : わる数の小数点が「どの数字の前」にあるか(表示用index)
+   - shift             : わる数を整数にするために小数点を右に動かす桁数
+   - dividendDigits    : 表示するわられる数の数字配列(0補充後・小数点抜き)
+   - dividendPointBefore: わられる数の元の小数点位置(数字index)。整数なら digits.length
+   - padZeros          : 0補充した個数(右側に補った0)
+   - intDividend       : 小数点移動後の整数(わられる数)
+   - intDivisor        : 小数点移動後の整数(わる数)
+   - quotientDigits    : 商の数字配列(整数部+小数部, 小数点抜き)
+   - quotientPointBefore: 商の小数点が「どの数字の前」に来るか(数字index)。整数商なら長さ
+   - calcDigits        : ひっ算で実際に割り算する被除数の数字配列(整数dividendDigits + 割り進み0)
+   - extraZeros        : 割り進みのために末尾に補う0の個数
+   ============================================================ */
+function analyzeDecimal(dividendStr, divisorStr, stopPlaces) {
+  function decimals(s) { const i = s.indexOf('.'); return i === -1 ? 0 : s.length - i - 1; }
+  function digitsOf(s) { return s.replace('.', '').split(''); }
+
+  const divDec = decimals(divisorStr);
+  const dvdDec = decimals(dividendStr);
+  const shift = divDec;  // わる数を整数にする = 小数点を divDec 桁右へ
+
+  // --- わる数(表示) ---
+  const divisorDigits = digitsOf(divisorStr);
+  const divisorPointBefore = (divisorStr.indexOf('.') === -1)
+    ? divisorDigits.length
+    : divisorStr.indexOf('.');   // 小数点の左にある数字の個数
+
+  // --- わられる数(表示・0補充あり) ---
+  let dividendDigits = digitsOf(dividendStr);
+  // 元の小数点位置(数字index)
+  let dividendPointBefore = (dividendStr.indexOf('.') === -1)
+    ? dividendDigits.length
+    : dividendStr.indexOf('.');
+  // 小数点を shift 桁右へ動かす。動かした先に数字が足りなければ0を補う
+  const newPointBefore = dividendPointBefore + shift;
+  let padZeros = 0;
+  while (dividendDigits.length < newPointBefore) {
+    dividendDigits.push('0');
+    padZeros++;
+  }
+
+  // --- 移動後の整数 ---
+  const intDivisor = parseInt(divisorDigits.join(''), 10);
+  // --- 移動後の整数(参考値) ---
+  // 移動後の被除数の整数部 = newPointBefore 桁ぶん
+  const intDividendStr = dividendDigits.slice(0, newPointBefore).join('') || '0';
+  const intDividend = parseInt(intDividendStr, 10);
+
+  // --- 実際に割り算する数字列 ---
+  // calcDigits = 移動後の被除数の「全桁」(整数部 + 残った小数部) + 割り進み0
+  // ひっ算は1桁ずつ下ろして割るので、小数部の桁もそのまま含める。
+  const calcDigits = dividendDigits.map(Number);
+
+  // ---- あまりを出すレベル(stopPlaces 指定)か、割り進みレベルかで分岐 ----
+  const stopMode = (typeof stopPlaces === 'number');
+  let extraZeros = 0;
+  if (stopMode) {
+    // 小数第 stopPlaces 位まで割って止める(割り進みしない)。
+    // 移動後の被除数の小数部桁数を stopPlaces ちょうどに揃える。
+    //   現在の小数部桁数 = calcDigits.length - newPointBefore
+    let curFrac = calcDigits.length - newPointBefore;
+    // 足りなければ0を補い、それを「割り進みではなく位を揃える0」として extra 扱い
+    while (curFrac < stopPlaces) { calcDigits.push(0); extraZeros++; curFrac++; }
+    // 多すぎる場合は切り捨て(通常は起きない)
+    while (curFrac > stopPlaces) { calcDigits.pop(); curFrac--; }
+  } else {
+    // 全桁を1つの整数として見たときの剰余を求め、割り切れるまで0を補う
+    let acc = 0;
+    for (const d of calcDigits) acc = acc * 10 + d;
+    let remainder = acc % intDivisor;
+    while (remainder !== 0 && extraZeros < 6) {
+      calcDigits.push(0);
+      extraZeros++;
+      remainder = (remainder * 10) % intDivisor;
+    }
+  }
+
+  // 商の小数点位置(数字index): 移動後の被除数の整数部桁数 = newPointBefore
+  const quotientPointBefore = newPointBefore;
+
+  // 商(数字列)を求める: 計算対象の全体を整数とみなして割った商(あまりレベルは切り捨て)
+  const fullDividend = parseInt(calcDigits.join(''), 10);
+  const exactQuotient = stopMode
+    ? Math.floor(fullDividend / intDivisor)
+    : Math.round(fullDividend / intDivisor);  // 割り切れる前提
+  // 計算対象の全体に対する最終あまり(あまりレベルで使用)。
+  const finalRemainder = fullDividend % intDivisor;
+  // 商の桁数は calcDigits と同じ位取りで並ぶ。文字列化して左ゼロ補完して桁を合わせる
+  let qstr = String(exactQuotient);
+  const totalQuotientDigits = calcDigits.length;
+  while (qstr.length < totalQuotientDigits) qstr = '0' + qstr;
+  const quotientDigitsRaw = qstr.split('');
+
+  return {
+    divisorDigits, divisorPointBefore, shift,
+    dividendDigits, dividendPointBefore, padZeros,
+    newPointBefore, intDivisor, intDividend,
+    calcDigits, extraZeros, quotientPointBefore,
+    quotientDigitsRaw, stopMode, stopPlaces: stopMode ? stopPlaces : 0,
+    finalRemainder
+  };
+}
+
+function computeSteps(calcDigits, divisor, forceFirstPos) {
+  // calcDigits: 数字配列(整数。割り進み0を含む)。divisor: 整数
+  // forceFirstPos: 商の最初の位を強制的にこの位置(以下)から立てる(整数部商0で一の位に0を立てるため)
+  const digits = calcDigits.slice();
+  const n = digits.length;
+  const steps = [];
+
+  let firstQuotientPosition = -1;
+  let p = 0, acc = 0;
+  while (p < n) {
+    acc = acc * 10 + digits[p];
+    if (acc >= divisor) { firstQuotientPosition = p; break; }
+    p++;
+  }
+  // 全桁が divisor 未満(あり得ないが保険): 先頭から立てる
+  if (firstQuotientPosition === -1) firstQuotientPosition = 0;
+  // 整数部の商が0になる場合は、一の位(forceFirstPos)に「0」を立てさせる
+  if (typeof forceFirstPos === 'number' && forceFirstPos >= 0 && firstQuotientPosition > forceFirstPos) {
+    firstQuotientPosition = forceFirstPos;
+  }
+
+  const fullDividend = parseInt(digits.join(''), 10);
+
+  let partial = 0;
+  for (let i = 0; i < n; i++) {
+    partial = partial * 10 + digits[i];
+    if (i < firstQuotientPosition) continue;
+
+    const q = Math.floor(partial / divisor);
+    const product = q * divisor;
+    const remainder = partial - product;
+
+    steps.push({ kind: 'tateru', position: i, value: q, partial, product, remainder });
+    steps.push({ kind: 'kakeru', position: i, value: product, partial, remainder });
+    steps.push({ kind: 'hiku',   position: i, value: remainder, partial });
+
+    if (i < n - 1) {
+      steps.push({ kind: 'orosu', position: i + 1, value: digits[i + 1], broughtDown: digits[i + 1] });
+      partial = remainder;
+    } else {
+      partial = remainder;
+    }
+  }
+
+  return { steps, firstQuotientPosition, digits, leadingZeroMode: false,
+           finalQuotient: Math.floor(fullDividend / divisor),
+           finalRemainder: fullDividend % divisor };
+}
+
+function buildPlan(calcDigits, divisor, forceFirstPos) {
+  const result = computeSteps(calcDigits, divisor, forceFirstPos);
+  const { steps, firstQuotientPosition, digits } = result;
+
+  const activeStages = [];
+  for (const s of steps) {
+    if (s.kind === 'tateru' && !activeStages.includes(s.position)) activeStages.push(s.position);
+  }
+
+  const stageData = {};
+  for (const pos of activeStages) {
+    stageData[pos] = { product: 0, remainder: 0, partialStart: 0, partialEnd: 0 };
+  }
+
+  let partial = 0;
+  for (let i = 0; i < digits.length; i++) {
+    partial = partial * 10 + digits[i];
+    if (i < firstQuotientPosition) continue;
+    const q = Math.floor(partial / divisor);
+    const product = q * divisor;
+    const remainder = partial - product;
+    const start = (i === firstQuotientPosition) ? 0 : i;
+    stageData[i].product = product;
+    stageData[i].remainder = remainder;
+    stageData[i].partialStart = start;
+    stageData[i].partialEnd = i;
+    partial = remainder;
+  }
+
+  return { ...result, steps, activeStages, stageData, n: digits.length };
+}
+
+/* ============================================================
+   GRID LAYOUT
+   方眼ノートのマス単位で座標を扱う:
+   - col: 列 (0始まり、左から右)
+   - row: 行 (0始まり、上から下)
+   ÷の構造:
+     row 0: 商
+     row 1: わる数 ) | わられる数...
+     row 2: かける結果（積）
+     [横線]
+     row 3: ひいた結果（あまり）+ おろされた数字
+     row 4: 次の積
+     [横線]
+     row 5: 次のあまり ...
+
+   各ステージは 2行(積→残り) を消費。
+   おろす時は、ひいた結果の右隣に数字を配置する。
+   ============================================================ */
+
+function getCellSize() {
+  const panel = document.getElementById('calcPanel');
+  const w = panel.clientWidth  || window.innerWidth  * 0.45;
+  const h = panel.clientHeight || window.innerHeight * 0.4;
+
+  // 実際の問題の行数・列数に合わせてマスを最大化する。
+  // (2桁問題は3桁問題より行・列が少ないので、その分マスを大きくできる)
+  let rows = 8;   // フォールバック(3桁・2ステージ想定)
+  let cols = 5;   // フォールバック(わる数 + 3桁 + 余白)
+  const c = state.current;
+  if (c && c.plan) {
+    const n = c.n;
+    const stages = c.plan.activeStages.length;
+    const divLen = (c.dec && c.dec.divisorDigits) ? c.dec.divisorDigits.length : 1;
+    rows = 2 + stages * 2;       // 商行 + わられる数行 + 各ステージ2行
+    cols = n + divLen;           // わる数(divLen列) + わられる数n列
+  }
+  // 余白ぶんを少し足してから割る (縦は上下、横は左右＋あまりタグ用)
+  const candH = Math.floor(h / (rows + 1.2));
+  const candW = Math.floor(w / (cols + 1.5));
+  // タブレット/PCでは大きめのマスを許容 (上限を引き上げ)
+  return Math.max(34, Math.min(candH, candW, 130));
+}
+
+/* ---------- DOMスナップショット & 復元 ----------
+   リサイズ時に DOM を再構築しても入力済み内容を保持するため、
+   現在の表示状態を捕捉して、再描画後に再適用する */
+function captureDivisionSnapshot() {
+  const c = state.current;
+  if (!c) return null;
+  const snap = { cells: {}, sublines: {}, hasRemainderTag: false };
+
+  // 各セルの内容を捕捉
+  const ids = [];
+  for (let i = 0; i < c.n; i++) {
+    ids.push(`q-${i}`, `d-${i}`);
+  }
+  for (const stagePos of c.plan.activeStages) {
+    for (let i = 0; i < c.n; i++) {
+      ids.push(`p-${stagePos}-${i}`, `r-${stagePos}-${i}`);
+    }
+  }
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) {
+      snap.cells[id] = {
+        text: el.textContent,
+        faded: el.classList.contains('faded'),
+        leadZero: el.classList.contains('lead-zero'),
+        struck: el.classList.contains('struck')
+      };
+    }
+  }
+
+  // sublineの表示状態
+  for (const stagePos of c.plan.activeStages) {
+    const sl = document.getElementById(`subline-${stagePos}`);
+    if (sl) snap.sublines[stagePos] = sl.style.display;
+  }
+
+  // あまりタグの有無
+  const tag = document.querySelector('#division .remainder-tag');
+  snap.hasRemainderTag = !!tag;
+
+  return snap;
+}
+
+function applyDivisionSnapshot(snap) {
+  if (!snap) return;
+  // 各セルの内容を復元
+  for (const id in snap.cells) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = snap.cells[id].text;
+      if (snap.cells[id].faded) el.classList.add('faded');
+      // 元のわられる数の桁・既に下ろした桁は表示する(hidden-digitを解除)
+      if (snap.cells[id].text !== '') el.classList.remove('hidden-digit');
+    }
+  }
+  // 移動済みの小数点を再描画
+  if (state.current) renderDecimalPoints(getCellSize(), state.current.BR);
+  // subline
+  for (const stagePos in snap.sublines) {
+    const sl = document.getElementById(`subline-${stagePos}`);
+    if (sl) sl.style.display = snap.sublines[stagePos];
+  }
+  if (snap.hasRemainderTag) showRemainderTag();
+}
+
+function renderDivision() {
+  const c = state.current;
+  const plan = c.plan;
+  const { divisor, digits, n } = c;
+  const activeStages = plan.activeStages;
+
+  const cell = getCellSize();
+  document.documentElement.style.setProperty('--cell', cell + 'px');
+
+  const panel = document.getElementById('calcPanel');
+  const div = document.getElementById('division');
+  div.innerHTML = '';
+
+  const DIVISOR_COL = 0;
+  const QUOTIENT_ROW = 0;
+  const DIVIDEND_ROW = 1;
+
+  const dec = c.dec;
+  const divLen = dec.divisorDigits.length;
+  const BR = divLen;                 // ブラケット(縦線)の列。わる数は 0..BR-1、わられる数は BR..
+  const FIRST_DIGIT_COL = BR;
+
+  const totalCols = BR + n;          // わる数divLen列 + わられる数n列
+  const totalRows = 2 + activeStages.length * 2;
+
+  const divWidth = totalCols * cell;
+  const divHeight = totalRows * cell;
+
+  // panelのサイズを取得して、divisionをマス単位にスナップして中央寄せ
+  const pw = panel.clientWidth;
+  const ph = panel.clientHeight;
+  const rawLeft = (pw - divWidth) / 2;
+  const rawTop  = (ph - divHeight) / 2;
+  const snapLeft = Math.round(rawLeft / cell) * cell;
+  const snapTop  = Math.round(rawTop  / cell) * cell;
+
+  div.style.width  = divWidth + 'px';
+  div.style.height = divHeight + 'px';
+  div.style.left = snapLeft + 'px';
+  div.style.top  = snapTop + 'px';
+
+  document.documentElement.style.setProperty('--gx', snapLeft + 'px');
+  document.documentElement.style.setProperty('--gy', snapTop + 'px');
+
+  // 列オフセットを current に保存(各種ヘルパーがマス座標を計算するため)
+  c.BR = BR;
+
+  // ヘルパー
+  function placeCell(col, row, content, opts = {}) {
+    const el = document.createElement('div');
+    el.className = 'cell';
+    el.style.left = (col * cell) + 'px';
+    el.style.top  = (row * cell) + 'px';
+    el.textContent = content;
+    if (opts.id) el.id = opts.id;
+    if (opts.className) el.className += ' ' + opts.className;
+    div.appendChild(el);
+    return el;
+  }
+  function placeEmpty(col, row, id) {
+    const el = document.createElement('div');
+    el.className = 'cell';
+    el.style.left = (col * cell) + 'px';
+    el.style.top  = (row * cell) + 'px';
+    el.id = id;
+    div.appendChild(el);
+    return el;
+  }
+
+  // 1. わる数(数字) を col 0..BR-1 に配置
+  // わる数も、移動後に整数化したとき先頭に余分な0が残る場合(例:0.8→08.)は薄く表示。
+  let divFirstNonZero = -1;
+  for (let i = 0; i < dec.divisorDigits.length; i++) {
+    if (dec.divisorDigits[i] !== '0') { divFirstNonZero = i; break; }
+  }
+  // わる数の余分な先頭0の桁index(0.8→[0], 0.15→[0])を記録。
+  // フェードは「小数点が末尾まで移動し整数化した時点」で適用する(最初は普通の黒)。
+  c.divLeadZeroIdx = (dec.shift > 0 && divFirstNonZero > 0)
+    ? Array.from({length: divFirstNonZero}, (_, k) => k) : [];
+  for (let i = 0; i < divLen; i++) {
+    const el = document.createElement('div');
+    el.className = 'divisor-cell';
+    el.id = `dv-${i}`;
+    el.style.left = (i * cell) + 'px';
+    el.style.top  = (DIVIDEND_ROW * cell) + 'px';
+    el.textContent = dec.divisorDigits[i];
+    div.appendChild(el);
+  }
+
+  // 2. ブラケット ")" の縦線 (col BR の境界)
+  const bracket = document.createElement('div');
+  bracket.className = 'bracket-line';
+  bracket.style.left = (cell * BR) + 'px';
+  bracket.style.transform = 'translateX(-50%)';
+  bracket.style.top  = (DIVIDEND_ROW * cell + cell * 0.1) + 'px';
+  bracket.style.height = (cell * 0.8) + 'px';
+  div.appendChild(bracket);
+
+  // 3. 上の横線 (商の下)
+  const topBar = document.createElement('div');
+  topBar.className = 'top-bar-line';
+  topBar.style.left  = (cell * BR) + 'px';
+  topBar.style.top   = (DIVIDEND_ROW * cell) + 'px';
+  topBar.style.width = (cell * n) + 'px';
+  div.appendChild(topBar);
+
+  // 4. わられる数 (digits) を row=1 に配置
+  //    元の桁(整数部+小数部)と、割り進みで補った0・0補充の桁を区別して表示
+  // わられる数の整数部に「余分な先頭0」があれば薄く表示する。
+  // 例: 0.2 を移動して 02. になる場合の先頭の0(たてるのヒントの緑フラッシュからも除外)
+  // 整数部 = 桁0..newPointBefore-1。その中で最初の非0より前の0を leadZero とみなす。
+  let firstNonZeroInt = -1;
+  for (let i = 0; i < dec.newPointBefore; i++) {
+    if (digits[i] !== 0 && digits[i] !== '0') { firstNonZeroInt = i; break; }
+  }
+  for (let i = 0; i < n; i++) {
+    const isExtra = i >= dec.dividendDigits.length;            // 割り進みで足した0
+    const isPad   = i >= (dec.dividendDigits.length - dec.padZeros) && i < dec.dividendDigits.length; // 0補充
+    const isLeadZero = (firstNonZeroInt > 0 && i < firstNonZeroInt); // 整数部の余分な先頭0
+    const opts = { id: `d-${i}` };
+    let cls = '';
+    if (isExtra) cls += ' extra-zero hidden-digit';   // 割り進みの0(計算時に出す)
+    if (isPad)   cls += ' pad-zero hidden-digit';     // 0補充(点移動時に出す)
+    if (isLeadZero) cls += ' faded lead-zero';        // 余分な先頭0(薄く・ヒント除外)
+    if (cls) opts.className = cls.trim();
+    placeCell(FIRST_DIGIT_COL + i, DIVIDEND_ROW, digits[i], opts);
+  }
+
+  // 5. 商の空マス (row=0)
+  for (let i = 0; i < n; i++) {
+    placeEmpty(FIRST_DIGIT_COL + i, QUOTIENT_ROW, `q-${i}`);
+  }
+
+  // 6. 各ステージの 積行 / 残り行
+  activeStages.forEach((stagePos, stageIdx) => {
+    const productRow   = 2 + stageIdx * 2;
+    const remainderRow = 3 + stageIdx * 2;
+    for (let i = 0; i < n; i++) {
+      placeEmpty(FIRST_DIGIT_COL + i, productRow, `p-${stagePos}-${i}`);
+    }
+    for (let i = 0; i < n; i++) {
+      placeEmpty(FIRST_DIGIT_COL + i, remainderRow, `r-${stagePos}-${i}`);
+    }
+    const subLine = document.createElement('div');
+    subLine.className = 'sub-line';
+    subLine.id = `subline-${stagePos}`;
+    subLine.style.left  = (FIRST_DIGIT_COL * cell) + 'px';
+    subLine.style.top   = ((productRow + 1) * cell) + 'px';
+    subLine.style.width = (n * cell) + 'px';
+    subLine.style.display = 'none';
+    div.appendChild(subLine);
+  });
+
+  // 7. 小数点マーカー(わる数・わられる数・商)を配置
+  renderDecimalPoints(cell, BR);
+}
+
+/* ---------- 小数点マーカー & 移動ステップ円の描画 ----------
+   小数点は「列の境界」に置く。境界index = その点の左にある数字の個数。
+   ・c.divisorPt / c.dividendPt / c.quotientPt = 現在の点の境界位置(未配置なら null)
+   ・各数の「目標位置」までの残りの境界に、左から順に点線円(ステップ円)を出す。
+     一番左(=次に押すべき)の円だけを active にしてタッチ可能にする。
+   フェーズに応じて divisor / dividend / quotient のどれを操作中か切り替える。 */
+function renderDecimalPoints(cell, BR) {
+  const c = state.current;
+  const dec = c.dec;
+  const div = document.getElementById('division');
+  if (!div) return;
+
+  // 既存の点・円を消す(お皿矢印は残す)
+  div.querySelectorAll('.dec-point, .step-circle').forEach(e => e.remove());
+
+  const DIVIDEND_ROW = 1;
+  const QUOTIENT_ROW = 0;
+  const PT = cell * 0.16;
+  const baseYd = (DIVIDEND_ROW + 1) * cell - PT * 0.2;
+  const baseYq = (QUOTIENT_ROW + 1) * cell - PT * 0.2;
+
+  // 縦線(ブラケット)と重ならないよう、点がBR(縦線)に来るときは少し左へずらす量
+  const nudge = cell * 0.16;
+
+  function dot(boundaryCol, topPx, cls, id, shiftLeft) {
+    const el = document.createElement('div');
+    el.className = 'dec-point ' + cls;
+    let x = boundaryCol * cell - PT / 2;
+    if (shiftLeft) x -= nudge;
+    el.style.left = x + 'px';
+    el.style.top  = (topPx - PT / 2) + 'px';
+    el.style.width = PT + 'px';
+    el.style.height = PT + 'px';
+    if (id) el.id = id;
+    div.appendChild(el);
+    return el;
+  }
+
+  // 現在「操作中(=赤)」の小数点はどれか
+  // shiftDivisor中はわる数, shiftDividend中はわられる数が赤。それ以外は黒。
+  const activeRole =
+    (c.phase === 'shiftDivisor') ? 'divisor' :
+    (c.phase === 'shiftDividend') ? 'dividend' : null;
+
+  // --- わる数の小数点 ---
+  const divBase = BR - dec.divisorDigits.length;
+  if (dec.shift > 0 && c.divisorPt !== null) {
+    const cls = (activeRole === 'divisor') ? 'active-pt divisor-pt' : 'inactive-pt divisor-pt';
+    // 最終位置(=ブラケット位置 BR)に来たら縦線と重ならないよう左へずらす
+    const atBracket = (divBase + c.divisorPt) >= BR;
+    dot(divBase + c.divisorPt, baseYd, cls, 'dvpt', atBracket);
+  }
+
+  // --- わられる数の小数点 ---
+  if (c.dividendPt !== null) {
+    const cls = (activeRole === 'dividend') ? 'active-pt dividend-pt' : 'inactive-pt dividend-pt';
+    dot(BR + c.dividendPt, baseYd, cls, 'ddpt', false);
+  }
+
+  // --- 商の小数点 ---
+  if (c.quotientPt !== null) {
+    dot(BR + c.quotientPt, baseYq, 'moved quotient-pt', 'qpt', false);
+  }
+
+  // --- あまりの小数点(類型5) ---
+  if (c.remainderPt !== null && typeof getRemainderRow === 'function') {
+    const remRow = getRemainderRow();
+    const baseYr = (remRow + 1) * cell - PT * 0.2;
+    dot(BR + c.remainderPt, baseYr, 'moved remainder-pt', 'rpt', false);
+  }
+}
+
+/* ステップ円(点線円)を描く。
+   targetが現在位置より右にある場合、current+1 .. target の各境界に円を置き、
+   一番左(=次の1歩)だけ active にしてタッチ可能にする。
+   row: 0=商行, 1=わられる数/わる数行
+   baseCol: 境界0に対応する表示列(divisorはBR-len, dividend/quotientはBR) */
+function renderStepCircles(role) {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+  if (!div) return;
+  div.querySelectorAll('.step-circle').forEach(e => e.remove());
+
+  let current, target, baseCol, row, onStep;
+  if (role === 'divisor') {
+    current = c.divisorPt; target = dec.divisorDigits.length;
+    baseCol = BR - dec.divisorDigits.length; row = 1;
+    onStep = stepDivisor;
+  } else if (role === 'dividend') {
+    current = c.dividendPt; target = dec.newPointBefore;
+    baseCol = BR; row = 1;
+    onStep = stepDividend;
+  } else {
+    return;  // quotient は スワイプ方式(renderStepCirclesは使わない)
+  }
+  if (current === null) current = 0;
+
+  const SZ = cell * 0.24;
+  const topPx = (row + 1) * cell - SZ * 0.55;  // 数字の右下あたり
+  for (let b = current + 1; b <= target; b++) {
+    const isNext = (b === current + 1);
+    const circle = document.createElement('div');
+    circle.className = 'step-circle' + (isNext ? ' active' : '');
+    circle.style.left = (baseCol + b) * cell - SZ / 2 + 'px';
+    circle.style.top  = topPx + 'px';
+    circle.style.width = SZ + 'px';
+    circle.style.height = SZ + 'px';
+    if (isNext) bindTap(circle, () => onStep());
+    div.appendChild(circle);
+  }
+}
+
+/* ============================================================
+   PHASE / 小数点の移動・配置の操作
+   フェーズ: shiftDivisor → shiftDividend → placeQuotientPoint → calc → done
+   ============================================================ */
+/* この問題のガイド手順の中で phase が何番目か(①②③④)を返す */
+function guideNum(phase) {
+  const c = state.current;
+  if (!c || !c.guideSteps) return '';
+  const idx = c.guideSteps.indexOf(phase);
+  if (idx < 0) return '';
+  return ['①','②','③','④','⑤','⑥'][idx] || '';
+}
+
+function startPhase() {
+  const c = state.current;
+  if (!c) return;
+
+  if (c.phase === 'shiftDivisor') {
+    setGuide(`${guideNum('shiftDivisor')} わる数を せいすうに しよう！\n赤い 小数点を 右へ スワイプ`);
+    renderDecimalPoints(getCellSize(), c.BR);
+    armPointSwipe('divisor');
+  } else if (c.phase === 'shiftDividend') {
+    if (c.dividendIsDecimal) {
+      setGuide(`${guideNum('shiftDividend')} わられる数も おなじだけ うごかす！\n赤い 小数点を 右へ スワイプ`);
+      renderDecimalPoints(getCellSize(), c.BR);
+      armPointSwipe('dividend');
+    } else if (c.dividendPt === null) {
+      // 整数: まず隠れた小数点を「左下/右下」から探す(レベル1の①と同様)
+      setGuide(`${guideNum('shiftDividend')} わられる数の 小数点は どこ？\n正しい ほうの ○ を おして 見つけよう`);
+      renderDecimalPoints(getCellSize(), c.BR);
+      armFindHiddenDividend();
+    } else {
+      // 見つけた後: 移動操作(右へスワイプ)
+      setGuide(`${guideNum('shiftDividend')} わられる数も おなじだけ うごかす！\n赤い 小数点を 右へ スワイプ`);
+      renderDecimalPoints(getCellSize(), c.BR);
+      armPointSwipe('dividend');
+    }
+  } else if (c.phase === 'placeQuotientPoint') {
+    if (!hasDecimalQuotient()) { enterCalcPhase(); return; }
+    const num = guideNum('placeQuotientPoint');
+    if (c.findHidden && c.dividendPt === null && !c.quotientFound) {
+      // まだ被除数の点が無い(L1の3問目以降) → 隠れた点を探す
+      setGuide(`${num} 小数点は どこに ある？\n正しい ほうの ○ を おして 見つけよう`);
+      renderDecimalPoints(getCellSize(), c.BR);
+      armFindHidden();
+    } else {
+      // 見えている小数点を上にスワイプして商の小数点を打つ
+      setGuide(`${num} 小数点を 上に スワイプして\n商の 小数点を うとう！`);
+      renderDecimalPoints(getCellSize(), c.BR);
+      armQuotientSwipe();
+    }
+  }
+}
+
+function hasDecimalQuotient() {
+  return state.current.quotientHasPoint;
+}
+
+function setGuide(text) {
+  const g = document.getElementById('phaseGuide');
+  if (!g) return;
+  g.style.display = 'block';
+  g.innerHTML = text.replace(/\n/g, '<br>');
+}
+function hideGuide() {
+  const g = document.getElementById('phaseGuide');
+  if (g) g.style.display = 'none';
+}
+
+/* タップ(クリック/タッチ両対応)を1回だけ確実に発火させるヘルパー。 */
+function bindTap(el, fn) {
+  if (!el) return;
+  let handled = false;
+  const wrap = (e) => {
+    if (handled) return;
+    handled = true;
+    setTimeout(() => { handled = false; }, 400);
+    fn(e);
+  };
+  el.addEventListener('click', wrap);
+  el.addEventListener('touchend', (e) => { e.preventDefault(); wrap(e); }, { passive: false });
+}
+
+/* わる数の小数点を1歩右へ */
+function stepDivisor() {
+  const c = state.current;
+  if (c.phase !== 'shiftDivisor') return;
+  const dec = c.dec;
+  if (c.divisorPt === null) c.divisorPt = dec.divisorPointBefore;
+  c.divisorPt += 1;
+  const cell = getCellSize();
+  // お皿矢印: 今またいだ数字(= divisorPt-1 桁目)の右下に表示
+  flashArrowDivisor(c.divisorPt - 1);
+  renderDecimalPoints(cell, c.BR);
+  if (c.divisorPt >= dec.divisorDigits.length) {
+    // 整数化した → 余分な先頭0を薄く表示(0.8→08.)
+    (c.divLeadZeroIdx || []).forEach(idx => {
+      const el = document.getElementById(`dv-${idx}`);
+      if (el) el.classList.add('faded', 'lead-zero');
+    });
+    // 到達 → わられる数へ。先に phase を切り替えてから描き直し、
+    // 整数化したわる数の小数点を「赤→黒」にする。
+    c.phase = 'shiftDividend';
+    renderDecimalPoints(cell, c.BR);
+    setTimeout(() => startPhase(), 300);
+  } else {
+    // まだ整数になっていない → 次の1歩のスワイプを用意
+    armPointSwipe('divisor');
+  }
+}
+
+/* わられる数の小数点を1歩右へ(必要なら0を補充/追加) */
+function stepDividend() {
+  const c = state.current;
+  if (c.phase !== 'shiftDividend') return;
+  const dec = c.dec;
+  const cell = getCellSize();
+
+  if (c.dividendPt === null) {
+    // 整数だった場合: まず「隠れていた点」をその位置(右端)に出す。0は足さない。
+    c.dividendPt = dec.dividendPointBefore;
+    renderDecimalPoints(cell, c.BR);
+    flashArrowDividend(c.dividendPt - 1);
+  } else {
+    // すでに点がある → 1歩右へ。またいだ桁が pad-zero ならそれを表示する。
+    c.dividendPt += 1;
+    const crossedIdx = c.dividendPt - 1;  // またいだ数字の桁index
+    const dcell = document.getElementById(`d-${crossedIdx}`);
+    if (dcell && dcell.classList.contains('hidden-digit')) {
+      dcell.classList.remove('hidden-digit');
+      dcell.classList.add('pop-in');
+      setTimeout(() => dcell.classList.remove('pop-in'), 500);
+    }
+    renderDecimalPoints(cell, c.BR);
+    flashArrowDividend(crossedIdx);
+  }
+
+  if (c.dividendPt >= dec.newPointBefore) {
+    // 到達 → 商の小数点フェーズへ。
+    // 先に phase を切り替えてから点を描き直すことで、
+    // 移動が終わったわられる数の小数点を「赤→黒」に確実に変える(③)。
+    c.phase = 'placeQuotientPoint';
+    renderDecimalPoints(cell, c.BR);
+    setTimeout(() => startPhase(), 300);
+  } else {
+    // まだ目標位置でない → 次の1歩のスワイプを用意
+    armPointSwipe('dividend');
+  }
+}
+
+/* shiftDividendフェーズ用: 整数の被除数の隠れた小数点を左下/右下から探す。
+   見つけたら点を表示し、移動(ステップ円)へ。 */
+function armFindHiddenDividend() {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+  div.querySelectorAll('.find-circle').forEach(e => e.remove());
+
+  const correctBoundary = dec.dividendPointBefore;     // 右下(正解)
+  const wrongBoundary   = dec.dividendPointBefore - 1; // 左下(不正解)
+  const SZ = cell * 0.24;
+  const topPx = (1 + 1) * cell - SZ * 0.55;
+
+  function makeCircle(boundary, correct) {
+    const el = document.createElement('div');
+    el.className = 'find-circle';
+    el.style.left = (BR + boundary) * cell - SZ / 2 + 'px';
+    el.style.top  = topPx + 'px';
+    el.style.width = SZ + 'px';
+    el.style.height = SZ + 'px';
+    bindTap(el, () => {
+      if (c.phase !== 'shiftDividend' || c.dividendPt !== null) return;
+      if (correct) {
+        c.dividendPt = correctBoundary;   // 隠れた点を表示
+        div.querySelectorAll('.find-circle').forEach(e => e.remove());
+        renderDecimalPoints(cell, BR);
+        const dp = document.getElementById('ddpt');
+        if (dp) { dp.classList.add('pop-in'); setTimeout(() => dp.classList.remove('pop-in'), 500); }
+        if (c.dividendPt >= dec.newPointBefore) {
+          c.phase = 'placeQuotientPoint';
+          setTimeout(() => startPhase(), 300);
+        } else {
+          startPhase();   // shiftDividend(見つけた後)→ステップ円
+        }
+      } else {
+        el.classList.add('wrong-flash');
+        setTimeout(() => el.classList.remove('wrong-flash'), 600);
+        c.errorCount++;
+      }
+    });
+    return el;
+  }
+  div.appendChild(makeCircle(wrongBoundary, false));
+  div.appendChild(makeCircle(correctBoundary, true));
+}
+
+/* 「元の小数点が どこに かくれているか」を探す。
+   被除数の最後の整数桁の「左下」と「右下」に点線赤丸を出し、右下(正解)を選ばせる。
+   正解したら、その位置に小数点を表示し、スワイプ操作へ移る。 */
+function armFindHidden() {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+  div.querySelectorAll('.find-circle').forEach(e => e.remove());
+
+  // 探す対象の桁index = 元の小数点のすぐ左の桁 = dividendPointBefore-1
+  const digitIdx = dec.dividendPointBefore - 1;
+  const correctBoundary = dec.dividendPointBefore;   // 右下(=この桁の右の境界)が正解
+  const wrongBoundary   = dec.dividendPointBefore - 1; // 左下(=この桁の左の境界)が不正解
+
+  const SZ = cell * 0.24;
+  const topPx = (1 + 1) * cell - SZ * 0.55;   // 数字の右下あたり(わられる数行)
+
+  function makeCircle(boundary, correct) {
+    const el = document.createElement('div');
+    el.className = 'find-circle';
+    el.style.left = (BR + boundary) * cell - SZ / 2 + 'px';
+    el.style.top  = topPx + 'px';
+    el.style.width = SZ + 'px';
+    el.style.height = SZ + 'px';
+    bindTap(el, () => {
+      if (c.phase !== 'placeQuotientPoint' || c.quotientFound) return;
+      if (correct) {
+        c.quotientFound = true;
+        c.dividendPt = correctBoundary;     // 見つけた点を被除数行に表示
+        div.querySelectorAll('.find-circle').forEach(e => e.remove());
+        renderDecimalPoints(cell, BR);
+        const dp = document.getElementById('ddpt');
+        if (dp) { dp.classList.add('pop-in'); setTimeout(() => dp.classList.remove('pop-in'), 500); }
+        // スワイプ操作へ
+        startPhase();
+      } else {
+        el.classList.add('wrong-flash');
+        setTimeout(() => el.classList.remove('wrong-flash'), 600);
+        c.errorCount++;
+      }
+    });
+    return el;
+  }
+  div.appendChild(makeCircle(wrongBoundary, false));
+  div.appendChild(makeCircle(correctBoundary, true));
+}
+
+/* 被除数行の小数点を上にスワイプして、商の小数点を打つ。
+   スワイプ(上方向のドラッグ)で商行へ移動アニメーション。 */
+function armQuotientSwipe() {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+
+  // 被除数行の小数点(ddpt)を掴んで上にスワイプ
+  const srcBoundary = (c.dividendPt !== null) ? c.dividendPt : dec.quotientPointBefore;
+  const targetBoundary = dec.quotientPointBefore;
+  // ハンドル(赤丸)は「いま掴む被除数の小数点」の中心に重ねる。
+  // renderDecimalPoints の dot() と同じ基準: 点の中心X = boundaryCol * cell。
+  const PT = cell * 0.16;
+  const srcColX = (BR + srcBoundary) * cell;        // 掴む点(被除数)の中心X
+  const targetColX = (BR + targetBoundary) * cell;  // 打ち終わりの商の点の中心X
+  const dividendY = (1 + 1) * cell - PT * 0.2;   // 被除数行の点の中心Y(dot()と同基準)
+  const quotientY = (0 + 1) * cell - PT * 0.2;   // 商行の点の中心Y(dot()と同基準)
+
+  // 掴める大きめのハンドル(赤丸を点の中心に重ねる)
+  const handle = document.createElement('div');
+  handle.className = 'swipe-handle';
+  handle.id = 'swipeHandle';
+  const HS = cell * 0.4;
+  handle.style.width = HS + 'px';
+  handle.style.height = HS + 'px';
+  handle.style.left = (srcColX - HS / 2) + 'px';
+  handle.style.top  = (dividendY - HS / 2) + 'px';
+  div.appendChild(handle);
+
+  // 上スワイプを促す薄い上矢印ガイド(点の真上)
+  const ghost = document.createElement('div');
+  ghost.className = 'swipe-ghost';
+  ghost.textContent = '↑';
+  const GFS = cell * 0.5;
+  ghost.style.fontSize = GFS + 'px';
+  ghost.style.left = (srcColX - GFS / 2) + 'px';
+  ghost.style.top  = (quotientY) + 'px';
+  div.appendChild(ghost);
+
+  let dragging = false, startY = 0;
+  function ps(e){ dragging = true; startY = (e.touches?e.touches[0]:e).clientY; e.preventDefault(); }
+  function pm(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const y = (e.touches?e.touches[0]:e).clientY;
+    const dy = y - startY;
+    // 上に動かすほどハンドルを上へ(0〜上限)
+    const t = Math.max(0, Math.min(1, -dy / (dividendY - quotientY)));
+    handle.style.top = (dividendY - (dividendY - quotientY) * t - HS / 2) + 'px';
+  }
+  function pe(){
+    if(!dragging) return;
+    dragging = false;
+    const handleY = parseFloat(handle.style.top) + HS / 2;
+    // 商行に十分近ければ確定
+    if (handleY <= (dividendY + quotientY) / 2) {
+      lockQuotientPoint();
+    } else {
+      // 戻す
+      handle.style.transition = 'top 0.2s';
+      handle.style.top = (dividendY - HS / 2) + 'px';
+      setTimeout(()=>{ handle.style.transition=''; }, 220);
+    }
+  }
+  function lockQuotientPoint(){
+    cleanup();
+    c.quotientPt = targetBoundary;
+    renderDecimalPoints(cell, BR);
+    const qp = document.getElementById('qpt');
+    if (qp) {
+      qp.classList.add('rise-in');
+      setTimeout(() => qp.classList.remove('rise-in'), 500);
+    }
+    enterCalcPhase();
+  }
+  function cleanup(){
+    handle.remove(); ghost.remove();
+    window.removeEventListener('mousemove', pm);
+    window.removeEventListener('touchmove', pm);
+    window.removeEventListener('mouseup', pe);
+    window.removeEventListener('touchend', pe);
+  }
+  handle.addEventListener('mousedown', ps);
+  handle.addEventListener('touchstart', ps, {passive:false});
+  window.addEventListener('mousemove', pm);
+  window.addEventListener('touchmove', pm, {passive:false});
+  window.addEventListener('mouseup', pe);
+  window.addEventListener('touchend', pe);
+  // タップだけでも打てるように(スワイプが難しい子向けのフォールバック)
+  bindTap(handle, () => { if (!dragging) lockQuotientPoint(); });
+  c._swipeCleanup = cleanup;
+}
+
+/* 現在操作中の小数点(role)を「右へ1歩」スワイプして動かす。
+   赤い小数点の上に掴めるハンドルを置き、右へドラッグすると次の境界へ1歩進む。
+   到達判定や次フェーズへの遷移は stepDivisor()/stepDividend() に委ねる。 */
+function armPointSwipe(role) {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+  if (!div) return;
+  // 既存の横スワイプ用要素を消す
+  div.querySelectorAll('.hswipe-handle, .hswipe-ghost').forEach(e => e.remove());
+
+  // 現在の点の境界・基準列・目標境界を role ごとに決める
+  let curBoundary, baseCol, target;
+  if (role === 'divisor') {
+    if (c.divisorPt === null) c.divisorPt = dec.divisorPointBefore;
+    curBoundary = c.divisorPt;
+    baseCol = BR - dec.divisorDigits.length;
+    target = dec.divisorDigits.length;
+  } else { // dividend
+    if (c.dividendPt === null) c.dividendPt = dec.dividendPointBefore;
+    curBoundary = c.dividendPt;
+    baseCol = BR;
+    target = dec.newPointBefore;
+  }
+  if (curBoundary >= target) return;  // もう動かす必要なし
+
+  const row = 1;  // わる数・わられる数ともに被除数行と同じ段
+  const PT = cell * 0.16;
+  const yPt = (row + 1) * cell - PT * 0.2;        // 点のY(renderDecimalPointsと同基準)
+  const fromX = (baseCol + curBoundary) * cell;   // 現在の点の中心X
+  const toX   = (baseCol + curBoundary + 1) * cell; // 1歩右の中心X
+
+  // 掴めるハンドル(赤点に重ねる)
+  const HS = cell * 0.4;
+  const handle = document.createElement('div');
+  handle.className = 'hswipe-handle';
+  handle.id = 'hswipeHandle';
+  handle.style.width = HS + 'px';
+  handle.style.height = HS + 'px';
+  handle.style.left = (fromX - HS / 2) + 'px';
+  handle.style.top  = (yPt - HS / 2) + 'px';
+  div.appendChild(handle);
+
+  // 右スワイプを促す薄い右矢印ガイド(移動対象の点のすぐ右隣り)
+  const ghost = document.createElement('div');
+  ghost.className = 'hswipe-ghost';
+  ghost.textContent = '→';
+  const GFS = cell * 0.5;
+  ghost.style.fontSize = GFS + 'px';
+  // 点の中心(fromX)のすぐ右に矢印の左端が来るよう配置
+  ghost.style.left = (fromX + PT * 0.6) + 'px';
+  ghost.style.top  = (yPt - GFS / 2) + 'px';
+  div.appendChild(ghost);
+
+  let dragging = false, startX = 0;
+  function ps(e){ dragging = true; startX = (e.touches?e.touches[0]:e).clientX; e.preventDefault(); }
+  function pm(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const x = (e.touches?e.touches[0]:e).clientX;
+    const dx = x - startX;
+    const t = Math.max(0, Math.min(1, dx / (toX - fromX)));
+    handle.style.left = (fromX + (toX - fromX) * t - HS / 2) + 'px';
+  }
+  function pe(){
+    if(!dragging) return;
+    dragging = false;
+    const handleX = parseFloat(handle.style.left) + HS / 2;
+    // 次の境界に十分近ければ1歩確定
+    if (handleX >= (fromX + toX) / 2) {
+      commitMove();
+    } else {
+      handle.style.transition = 'left 0.2s';
+      handle.style.left = (fromX - HS / 2) + 'px';
+      setTimeout(()=>{ handle.style.transition=''; }, 220);
+    }
+  }
+  function commitMove(){
+    cleanup();
+    // 実際の移動処理は既存ロジックに委譲(お皿矢印・桁出し・到達判定・次フェーズ遷移)
+    if (role === 'divisor') stepDivisor();
+    else stepDividend();
+  }
+  function cleanup(){
+    handle.remove(); ghost.remove();
+    window.removeEventListener('mousemove', pm);
+    window.removeEventListener('touchmove', pm);
+    window.removeEventListener('mouseup', pe);
+    window.removeEventListener('touchend', pe);
+  }
+  handle.addEventListener('mousedown', ps);
+  handle.addEventListener('touchstart', ps, {passive:false});
+  window.addEventListener('mousemove', pm);
+  window.addEventListener('touchmove', pm, {passive:false});
+  window.addEventListener('mouseup', pe);
+  window.addEventListener('touchend', pe);
+  // タップでも1歩進めるフォールバック
+  bindTap(handle, () => { if (!dragging) commitMove(); });
+  c._hswipeCleanup = cleanup;
+}
+
+/* お皿矢印(わる数のboundaryをまたぐ弧の矢印) */
+function flashArrowDivisor(crossedDigitIdx) {
+  const c = state.current;
+  const cell = getCellSize();
+  const divBase = c.BR - c.dec.divisorDigits.length;
+  // 移動前の境界 = crossedDigitIdx(=divisorPt-1), 移動後 = crossedDigitIdx+1
+  const fromCol = divBase + crossedDigitIdx;
+  const toCol   = divBase + crossedDigitIdx + 1;
+  drawDishArrow(fromCol, toCol, 1, cell);
+}
+function flashArrowDividend(crossedDigitIdx) {
+  const c = state.current;
+  const cell = getCellSize();
+  const fromCol = c.BR + crossedDigitIdx;
+  const toCol   = c.BR + crossedDigitIdx + 1;
+  drawDishArrow(fromCol, toCol, 1, cell);
+}
+
+/* 「お皿矢印」: 移動前の点(fromCol境界)から移動後の点(toCol境界)へ、
+   下に膨らむ半円(弧)＋矢印を描く。表示後は消さずに残す。
+   row: 数字の行(1=わられる数/わる数)。SVGで弧を描画。 */
+function drawDishArrow(fromCol, toCol, row, cell) {
+  const div = document.getElementById('division');
+  if (!div) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const BLUE = (getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()) || '#4a90c8';
+
+  // 弧の始点・終点(数字の右下あたり)
+  const baseY = (row + 1) * cell - cell * 0.08;   // 数字のすぐ下
+  const x1 = fromCol * cell;
+  const x2 = toCol * cell;
+  const span = x2 - x1;
+  const bulge = Math.max(cell * 0.32, span * 0.55);  // 下への膨らみ
+
+  // SVGの描画領域(余白込み)
+  const pad = cell * 0.5;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'dish-arrow');
+  const left = x1 - pad;
+  const top  = baseY - cell * 0.1;
+  const w = span + pad * 2;
+  const h = bulge + cell * 0.5;
+  svg.style.position = 'absolute';
+  svg.style.left = left + 'px';
+  svg.style.top  = top + 'px';
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.style.overflow = 'visible';
+  svg.style.zIndex = 6;
+  svg.style.pointerEvents = 'none';
+  svg.style.opacity = '0.4';   // 視認の邪魔にならないよう薄く
+
+  // ローカル座標に変換
+  const lx1 = x1 - left, lx2 = x2 - left, ly = baseY - top;
+  const cy = ly + bulge;   // 制御点(下に膨らむ)
+
+  // 弧(2次ベジェ)
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', `M ${lx1} ${ly} Q ${(lx1+lx2)/2} ${cy} ${lx2} ${ly}`);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', BLUE);
+  path.setAttribute('stroke-width', Math.max(2, cell * 0.045));
+  path.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(path);
+
+  // 矢印の頭(終点に、右上向き)
+  const ah = cell * 0.16;
+  const head = document.createElementNS(NS, 'path');
+  // 終点で弧は右上方向に向かうので、左下→右上の矢じり
+  head.setAttribute('d', `M ${lx2 - ah} ${ly + ah*0.7} L ${lx2} ${ly} L ${lx2 - ah*1.1} ${ly - ah*0.2}`);
+  head.setAttribute('fill', 'none');
+  head.setAttribute('stroke', BLUE);
+  head.setAttribute('stroke-width', Math.max(2, cell * 0.045));
+  head.setAttribute('stroke-linecap', 'round');
+  head.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(head);
+
+  div.appendChild(svg);
+}
+
+/* 計算フェーズへ: テンキーを有効化し、最初のステップから数字入力へ */
+function enterCalcPhase() {
+  const c = state.current;
+  c.phase = 'calc';
+  setGuide(`${guideNum('calc')} ここから ひっ算で けいさん！`);
+  setTimeout(hideGuide, 1800);
+  enableNumpad(true);
+  c.stepIdx = 0;
+  beginStep();
+}
+
+/* 最終あまりが表示されている行(row)を返す。
+   = 最後の active ステージの「あまり行」。 */
+function getRemainderRow() {
+  const c = state.current;
+  const stages = c.plan.activeStages;
+  const lastIdx = stages.length - 1;
+  return 3 + lastIdx * 2;     // renderDivision の remainderRow と同じ式
+}
+
+/* あまりの小数点フェーズ: わられる数の小数点を「下」へスワイプして、
+   あまりの行に小数点を打つ(あまりの位取りを わられる数に そろえる)。 */
+function enterRemainderPointPhase() {
+  const c = state.current;
+  c.phase = 'placeRemainderPoint';
+  enableNumpad(false);
+  const num = guideNum('placeRemainderPoint');
+  setGuide(`${num} あまりの 小数点を うとう！\nわられる数の 小数点を 下へ スワイプ`);
+  renderDecimalPoints(getCellSize(), c.BR);
+  armRemainderSwipe();
+}
+
+/* わられる数行の小数点を下にスワイプして、あまり行に小数点を打つ。
+   armQuotientSwipe の「下方向」版。 */
+function armRemainderSwipe() {
+  const c = state.current;
+  const dec = c.dec;
+  const cell = getCellSize();
+  const BR = c.BR;
+  const div = document.getElementById('division');
+
+  const boundary = dec.quotientPointBefore;   // あまり点の境界(わられる数の点と同じ列)
+  const remRow = getRemainderRow();
+  const PT = cell * 0.16;
+  const colX = (BR + boundary) * cell;            // 点の中心X
+  const dividendY = (1 + 1) * cell - PT * 0.2;    // わられる数行の点の中心Y
+  const remainderY = (remRow + 1) * cell - PT * 0.2; // あまり行の点の中心Y
+
+  // 掴める大きめのハンドル(わられる数の点に重ねる)
+  const handle = document.createElement('div');
+  handle.className = 'swipe-handle';
+  handle.id = 'swipeHandle';
+  const HS = cell * 0.4;
+  handle.style.width = HS + 'px';
+  handle.style.height = HS + 'px';
+  handle.style.left = (colX - HS / 2) + 'px';
+  handle.style.top  = (dividendY - HS / 2) + 'px';
+  div.appendChild(handle);
+
+  // 下スワイプを促す薄い下矢印ガイド(点の真下)
+  const ghost = document.createElement('div');
+  ghost.className = 'swipe-ghost';
+  ghost.textContent = '↓';
+  const GFS = cell * 0.5;
+  ghost.style.fontSize = GFS + 'px';
+  ghost.style.left = (colX - GFS / 2) + 'px';
+  ghost.style.top  = (dividendY + PT) + 'px';
+  div.appendChild(ghost);
+
+  let dragging = false, startY = 0;
+  function ps(e){ dragging = true; startY = (e.touches?e.touches[0]:e).clientY; e.preventDefault(); }
+  function pm(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const y = (e.touches?e.touches[0]:e).clientY;
+    const dy = y - startY;
+    // 下に動かすほどハンドルを下へ(0〜下限)
+    const span = remainderY - dividendY;
+    const t = Math.max(0, Math.min(1, dy / span));
+    handle.style.top = (dividendY + span * t - HS / 2) + 'px';
+  }
+  function pe(){
+    if(!dragging) return;
+    dragging = false;
+    const handleY = parseFloat(handle.style.top) + HS / 2;
+    // あまり行に十分近ければ確定
+    if (handleY >= (dividendY + remainderY) / 2) {
+      lockRemainderPoint();
+    } else {
+      handle.style.transition = 'top 0.2s';
+      handle.style.top = (dividendY - HS / 2) + 'px';
+      setTimeout(()=>{ handle.style.transition=''; }, 220);
+    }
+  }
+  function lockRemainderPoint(){
+    cleanup();
+    c.remainderPt = boundary;
+    renderDecimalPoints(cell, BR);
+    const rp = document.getElementById('rpt');
+    if (rp) {
+      rp.classList.add('rise-in');
+      setTimeout(() => rp.classList.remove('rise-in'), 500);
+    }
+    // あまりの整数部が0で「.３」のように見える場合は、一の位に「0」を入力させる。
+    if (needsRemainderLeadingZero()) {
+      setTimeout(() => enterRemainderZeroPhase(), 350);
+    } else {
+      setTimeout(() => finishProblem(), 250);
+    }
+  }
+  function cleanup(){
+    handle.remove(); ghost.remove();
+    window.removeEventListener('mousemove', pm);
+    window.removeEventListener('touchmove', pm);
+    window.removeEventListener('mouseup', pe);
+    window.removeEventListener('touchend', pe);
+  }
+  handle.addEventListener('mousedown', ps);
+  handle.addEventListener('touchstart', ps, {passive:false});
+  window.addEventListener('mousemove', pm);
+  window.addEventListener('touchmove', pm, {passive:false});
+  window.addEventListener('mouseup', pe);
+  window.addEventListener('touchend', pe);
+  // タップだけでも打てるフォールバック
+  bindTap(handle, () => { if (!dragging) lockRemainderPoint(); });
+  c._swipeCleanup = cleanup;
+}
+
+
+/* あまりの整数部が0(「.３」のように一の位が空)かを判定。
+   一の位 = あまりの小数点(boundary=quotientPointBefore)のすぐ左の列。
+   あまりの数字が小数点より右(小数部)だけにある = 整数部が無い → 0が必要。 */
+function needsRemainderLeadingZero() {
+  const c = state.current;
+  if (!c || c.remainderPt === null) return false;
+  const dec = c.dec;
+  const plan = c.plan;
+  const onesCol = dec.quotientPointBefore - 1;   // 一の位の列index
+  if (onesCol < 0) return false;
+  // 最終ステージのあまりの左端の列を求める
+  const lastStage = plan.activeStages[plan.activeStages.length - 1];
+  const remLen = String(plan.stageData[lastStage].remainder).length || 1;
+  const remLeftCol = plan.stageData[lastStage].partialEnd - remLen + 1;
+  // あまりの左端が一の位より右(=整数部に数字が無い)なら0が必要
+  return remLeftCol > onesCol;
+}
+
+/* あまりの一の位に「0」を入力させるフェーズ(「.３」→「0.３」)。 */
+function enterRemainderZeroPhase() {
+  const c = state.current;
+  c.phase = 'inputRemainderZero';
+  enableNumpad(true);
+  const onesCol = c.dec.quotientPointBefore - 1;
+  const remRow = getRemainderRow();
+  const cellId = `r-${c.plan.activeStages[c.plan.activeStages.length - 1]}-${onesCol}`;
+  c._remZeroCellId = cellId;
+  // 一の位マスをスポット表示して入力を促す
+  clearSpotlight();
+  const target = document.getElementById(cellId);
+  if (target) target.classList.add('spot');
+  const num = guideNum('inputRemainderZero');
+  setGuide(`${num} あまりの 一のくらいに 「０」を 入れよう！`);
+  triggerHintAttention();
+}
+
+/* 現在の stepIdx のステップを開始。
+   おろすは自動実行、たてる/かける/ひくはテンキー入力待ち。 */
+function beginStep() {
+  const c = state.current;
+  const step = c.plan.steps[c.stepIdx];
+  if (!step) { finishProblem(); return; }
+
+  if (step.kind === 'orosu') {
+    const di = step.position;
+    const dcell = document.getElementById(`d-${di}`);
+    if (dcell && dcell.classList.contains('extra-zero')) {
+      dcell.classList.remove('hidden-digit');
+      dcell.classList.add('pop-in');
+      setTimeout(() => dcell.classList.remove('pop-in'), 500);
+    }
+    const ids = getInputCellIds(step);
+    const cellEl = document.getElementById(ids[0]);
+    if (cellEl) {
+      cellEl.textContent = step.value;
+      cellEl.classList.add('drop-anim');
+      setTimeout(() => cellEl.classList.remove('drop-anim'), 700);
+    }
+    c.stepIdx++;
+    setTimeout(() => beginStep(), 350);
+    return;
+  }
+
+  c.stepConfirmed = true;
+  c.inputBuffer = [];
+  spotlightForStep(step);
+  showHintForStep(step);
+  updateStepHint();
+}
+
+/* ---------- SPOTLIGHT ---------- */
+function clearSpotlight() {
+  document.querySelectorAll('.cell.spot').forEach(c => c.classList.remove('spot'));
+  clearHints();
+}
+
+/* ---------- HINT (固定モード時の計算ソース表示) ---------- */
+function clearHints() {
+  // hint-source クラスを削除
+  document.querySelectorAll('.hint-source').forEach(c => c.classList.remove('hint-source'));
+  // 演算記号ヒントを削除
+  document.querySelectorAll('.op-hint').forEach(el => el.remove());
+}
+
+/* 計算に使う数字をヒント表示する
+   step.kind に応じて、計算ソースとなるセルに hint-source クラスを付与し、
+   間に演算記号(÷ × -)を配置する
+   表示条件:
+   - ランダムモードでは出さない
+   - 固定モードでは:
+     - 1〜3問目: 常に表示
+     - 4〜5問目: hintRequested フラグが true のときのみ表示 */
+function showHintForStep(step) {
+  clearHints();
+  if (state.mode === 'random') return;
+  if (!step) return;
+
+  // 4〜5問目はヒント要求されたときのみ表示
+  const qNum = state.qIdx + 1;
+  const autoShow = (qNum <= 3);
+  if (!autoShow && !state.current.hintRequested) return;
+
+  const c = state.current;
+  const plan = c.plan;
+  const stage = plan.stageData[step.position];
+  const cell = getCellSize();
+
+  // 該当ステップで計算に使う「左側ソース」のセルIDリストと「右側ソース」を返すヘルパー
+  function highlight(ids) {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hint-source');
+    });
+  }
+
+  // 2つのセル(またはセルグループ)の間に演算記号を配置する
+  // leftIds と rightIds の中央の中間位置に op-hint を置く
+  function placeOpHint(leftIds, rightIds, opSymbol) {
+    const div = document.getElementById('division');
+    if (!div) return;
+    const allIds = [...leftIds, ...rightIds];
+    if (allIds.length === 0) return;
+
+    // 各セルの位置(left+width/2, top+height/2)を取得
+    const positions = allIds.map(id => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      // 数値で取得 (例: '75px' → 75)
+      const l = parseFloat(el.style.left) || 0;
+      const t = parseFloat(el.style.top) || 0;
+      return { l: l + cell / 2, t: t + cell / 2 };
+    }).filter(p => p);
+
+    if (positions.length < 2) return;
+
+    // 左ソースの右端 と 右ソースの左端 の中間に配置
+    const leftPositions = leftIds.map(id => {
+      const el = document.getElementById(id);
+      return el ? parseFloat(el.style.left) + cell : null;
+    }).filter(v => v !== null);
+    const rightPositions = rightIds.map(id => {
+      const el = document.getElementById(id);
+      return el ? parseFloat(el.style.left) : null;
+    }).filter(v => v !== null);
+
+    if (leftPositions.length === 0 || rightPositions.length === 0) return;
+
+    const leftEdge = Math.max(...leftPositions);
+    const rightEdge = Math.min(...rightPositions);
+    const centerX = (leftEdge + rightEdge) / 2;
+
+    // 縦位置は左右ソースの中心の平均
+    const allTops = positions.map(p => p.t);
+    const centerY = allTops.reduce((a, b) => a + b, 0) / allTops.length;
+
+    const opSize = cell * 0.55;
+    const op = document.createElement('div');
+    op.className = 'op-hint';
+    op.style.left = (centerX - opSize / 2) + 'px';
+    op.style.top  = (centerY - opSize / 2) + 'px';
+    op.textContent = opSymbol;
+    div.appendChild(op);
+  }
+
+  if (step.kind === 'tateru') {
+    // 「○ ÷ ◇ は…?」: partial の数字 と divisor を強調(余分な先頭0は除外)
+    const partialIds = getPartialCellIds(step.position);
+    document.querySelectorAll('.divisor-cell').forEach(el => {
+      if (!el.classList.contains('faded')) el.classList.add('hint-source');
+    });
+    highlight(partialIds);
+    placeOpHintAtDivisorCorner('÷');
+  }
+  else if (step.kind === 'kakeru') {
+    const qId = `q-${step.position}`;
+    const qEl = document.getElementById(qId);
+    if (qEl) qEl.classList.add('hint-source');
+    document.querySelectorAll('.divisor-cell').forEach(el => {
+      if (!el.classList.contains('faded')) el.classList.add('hint-source');
+    });
+    placeOpHintBetweenCells(qId, null, '×', { useDivisor: true });
+  }
+  else if (step.kind === 'hiku') {
+    // 「○ - ◇ は…?」: partial と product を強調
+    const partialIds = getPartialCellIds(step.position);
+    const prodLen = String(stage.product).length;
+    const prodStartCol = stage.partialEnd - prodLen + 1;
+    const prodIds = [];
+    for (let i = prodStartCol; i <= stage.partialEnd; i++) {
+      prodIds.push(`p-${step.position}-${i}`);
+    }
+    highlight(partialIds);
+    highlight(prodIds);
+    // − 記号を product 行の左隣マスに配置 (教科書通りの位置)
+    placeOpHintLeftOfProduct(prodIds, '−');
+  }
+  // orosu はヒント不要(既存のドロップアニメで十分)
+}
+
+/* 与えられた position に対する partial を構成するセルIDリストを返す
+   - 初回ステージ: dividend digits の partialStart..partialEnd
+   - 2回目以降: 前ステージの remainder 行で数字が表示されているセル全て */
+function getPartialCellIds(position) {
+  const c = state.current;
+  const plan = c.plan;
+  const stage = plan.stageData[position];
+  const stageIdx = plan.activeStages.indexOf(position);
+  const ids = [];
+  if (stageIdx === 0) {
+    for (let i = stage.partialStart; i <= stage.partialEnd; i++) {
+      const el = document.getElementById(`d-${i}`);
+      // 余分な先頭0(faded)は緑フラッシュ対象から除外(例: 02÷72 の 0)
+      if (el && el.classList.contains('faded')) continue;
+      ids.push(`d-${i}`);
+    }
+  } else {
+    const prevStage = plan.activeStages[stageIdx - 1];
+    for (let i = 0; i < c.n; i++) {
+      const el = document.getElementById(`r-${prevStage}-${i}`);
+      if (!el || el.textContent === '') continue;
+      // 薄字(faded)の0はpartialの計算には意味があるが、視覚的にはノイズになるので
+      // hint-source対象から除外する (例: 「09÷3」と見えて混乱するのを防ぐ)
+      if (el.classList.contains('faded')) continue;
+      ids.push(`r-${prevStage}-${i}`);
+    }
+  }
+  return ids;
+}
+
+/* ÷ 記号を divisor の真下(空きマス)に配置 (数字に被らない) */
+function placeOpHintAtDivisorCorner(opSymbol) {
+  const div = document.getElementById('division');
+  const divCells = document.querySelectorAll('.divisor-cell');
+  const divisorEl = divCells[divCells.length - 1];  // 最右(ブラケットに近い桁)
+  if (!div || !divisorEl) return;
+  const cell = getCellSize();
+
+  const dLeft = parseFloat(divisorEl.style.left);
+  const dTop  = parseFloat(divisorEl.style.top);
+
+  // 配置: divisor のちょうど真下のマス(空き)に置く
+  // divisorは col=0, row=1 → その真下(col=0, row=2)は積行の左端で空きスペース
+  const opSize = cell * 0.55;
+  const cx = dLeft + cell / 2;        // divisorと同じ列の中央
+  const cy = dTop + cell + cell / 2;  // 1マス下の中央
+
+  const op = document.createElement('div');
+  op.className = 'op-hint';
+  op.style.left = (cx - opSize / 2) + 'px';
+  op.style.top  = (cy - opSize / 2) + 'px';
+  op.textContent = opSymbol;
+  div.appendChild(op);
+}
+
+/* − 記号を product 行の左隣マスに配置 (算数教科書通り) */
+function placeOpHintLeftOfProduct(prodIds, opSymbol) {
+  const div = document.getElementById('division');
+  if (!div || prodIds.length === 0) return;
+  const cell = getCellSize();
+
+  // product の最左セルの位置を取得
+  const leftMostId = prodIds[0]; // prodIdsは左から右の順
+  const el = document.getElementById(leftMostId);
+  if (!el) return;
+  const pLeft = parseFloat(el.style.left);
+  const pTop  = parseFloat(el.style.top);
+
+  // product 行の1マス左の中央に配置
+  // ただしバッジサイズはcell*0.55なので、マス中央に来るよう調整
+  const opSize = cell * 0.55;
+  const cx = pLeft - cell / 2;      // 左隣マスの中央
+  const cy = pTop + cell / 2;       // product行の中央高さ
+
+  const op = document.createElement('div');
+  op.className = 'op-hint';
+  op.style.left = (cx - opSize / 2) + 'px';
+  op.style.top  = (cy - opSize / 2) + 'px';
+  op.textContent = opSymbol;
+  div.appendChild(op);
+}
+
+/* 商マス (q-X) と divisor を結ぶ位置に演算記号を配置 (× 用) */
+function placeOpHintBetweenCells(qId, _unused, opSymbol, opts) {
+  const div = document.getElementById('division');
+  const qEl = document.getElementById(qId);
+  const divCells = document.querySelectorAll('.divisor-cell');
+  const divisorEl = divCells[divCells.length - 1];
+  if (!div || !qEl || !divisorEl) return;
+  const cell = getCellSize();
+
+  const qLeft = parseFloat(qEl.style.left);
+  const qTop  = parseFloat(qEl.style.top);
+  const dLeft = parseFloat(divisorEl.style.left);
+  const dTop  = parseFloat(divisorEl.style.top);
+
+  // 中点
+  const cx = (qLeft + cell / 2 + dLeft + cell / 2) / 2;
+  const cy = (qTop + cell / 2 + dTop + cell / 2) / 2;
+
+  const opSize = cell * 0.55;
+  const op = document.createElement('div');
+  op.className = 'op-hint';
+  op.style.left = (cx - opSize / 2) + 'px';
+  op.style.top  = (cy - opSize / 2) + 'px';
+  op.textContent = opSymbol;
+  div.appendChild(op);
+}
+
+function spotlightForStep(step) {
+  clearSpotlight();
+  const plan = state.current.plan;
+  if (!step) return;
+  const stage = plan.stageData[step.position];
+
+  // ※ 黄色のスポットは「答えを書く場所」のみに付ける
+  //   (計算ソースは緑のパルスで showHintForStep が表示する)
+
+  if (step.kind === 'tateru') {
+    // 答えを書く場所 = 商マスのみ
+    const q = document.getElementById(`q-${step.position}`);
+    if (q) q.classList.add('spot');
+  }
+  else if (step.kind === 'kakeru') {
+    // 答えを書く場所 = 積を書くマス
+    const prodLen = String(stage.product).length;
+    const startCol = stage.partialEnd - prodLen + 1;
+    for (let i = startCol; i <= stage.partialEnd; i++) {
+      const c = document.getElementById(`p-${step.position}-${i}`);
+      if (c) c.classList.add('spot');
+    }
+  }
+  else if (step.kind === 'hiku') {
+    // 答えを書く場所 = ひいた結果を書くマス
+    const remLen = String(stage.remainder).length || 1;
+    const startCol = stage.partialEnd - remLen + 1;
+    for (let i = startCol; i <= stage.partialEnd; i++) {
+      const c = document.getElementById(`r-${step.position}-${i}`);
+      if (c) c.classList.add('spot');
+    }
+  }
+  else if (step.kind === 'orosu') {
+    // 答えを書く場所 = おろした数字を書くマス (前のステージのremainder行の該当列)
+    const prevActive = [...plan.activeStages].filter(p => p < step.position).pop();
+    if (prevActive !== undefined) {
+      const c = document.getElementById(`r-${prevActive}-${step.position}`);
+      if (c) c.classList.add('spot');
+    }
+  }
+}
+
+/* ---------- STEP HINT TEXT ---------- */
+function updateStepHint() {
+  const c = state.current;
+  if (!c) return;
+  const step = c.plan.steps[c.stepIdx];
+  const numHint = document.getElementById('numHint');
+  if (!numHint) return;
+
+  if (!step) { numHint.textContent = 'できた！'; return; }
+
+  // ランダムモードでは具体的な式ヒントを出さない
+  const isRandom = (state.mode === 'random');
+  if (isRandom) {
+    numHint.textContent = ({
+      tateru: 'たてよう', kakeru: 'かけよう', hiku: 'ひこう', orosu: 'おろそう'
+    })[step.kind] || '';
+    return;
+  }
+
+  const stage = c.plan.stageData[step.position];
+  if (step.kind === 'tateru') numHint.textContent = `${step.partial} ÷ ${c.divisor} は…?`;
+  else if (step.kind === 'kakeru') {
+    const tateruStep = c.plan.steps.filter(s => s.kind === 'tateru' && s.position === step.position)[0];
+    const q = tateruStep ? tateruStep.value : '?';
+    numHint.textContent = `${q} × ${c.divisor} は…?`;
+  }
+  else if (step.kind === 'hiku')  numHint.textContent = `${step.partial} - ${stage.product} は…?`;
+  else if (step.kind === 'orosu') numHint.textContent = `${step.value} を おろそう`;
+}
+
+/* ---------- INPUT EXPECTATIONS ---------- */
+function getExpectedDigits(step) {
+  const c = state.current;
+  if (step.kind === 'tateru') return [String(step.value)];
+  if (step.kind === 'orosu')  return [String(step.value)];
+  if (step.kind === 'kakeru') {
+    const stage = c.plan.stageData[step.position];
+    // 積の桁数 = partialの桁数（左ゼロ埋めしない＝積の自然な桁数で表示）
+    // 例: 47÷3で stage 0 は partial=4, product=3 → 1桁
+    //     234÷5で stage 1 は partial=23, product=20 → 2桁
+    return String(stage.product).split('');
+  }
+  if (step.kind === 'hiku') {
+    const stage = c.plan.stageData[step.position];
+    return String(stage.remainder).split('');
+  }
+  return [];
+}
+
+function getInputCellIds(step) {
+  const c = state.current;
+  const plan = c.plan;
+  if (step.kind === 'tateru') return [`q-${step.position}`];
+  if (step.kind === 'orosu') {
+    // おろし先 = 前のステージの remainder 行の、step.position 列
+    // (=ひいた結果の右隣)
+    const prevActive = [...plan.activeStages].filter(p => p < step.position).pop();
+    if (prevActive !== undefined) return [`r-${prevActive}-${step.position}`];
+    return [`d-${step.position}`];
+  }
+  if (step.kind === 'kakeru') {
+    const stage = plan.stageData[step.position];
+    const len = String(stage.product).length;
+    const startCol = stage.partialEnd - len + 1;
+    const ids = [];
+    for (let i = startCol; i <= stage.partialEnd; i++) ids.push(`p-${step.position}-${i}`);
+    return ids;
+  }
+  if (step.kind === 'hiku') {
+    const stage = plan.stageData[step.position];
+    const len = String(stage.remainder).length;
+    const startCol = stage.partialEnd - len + 1;
+    const ids = [];
+    for (let i = startCol; i <= stage.partialEnd; i++) ids.push(`r-${step.position}-${i}`);
+    return ids;
+  }
+  return [];
+}
+
+/* ---------- HANDLERS ---------- */
+/* 手順ボタンは廃止。数字入力のみで自動進行する。 */
+function handleNumClick(num) {
+  const c = state.current;
+  if (!c || c.completed) return;
+  // あまりの一の位に「0」を入力するフェーズ
+  if (c.phase === 'inputRemainderZero') {
+    handleRemainderZeroInput(num);
+    return;
+  }
+  if (c.phase !== 'calc') return;       // 小数点移動が終わるまでは入力不可
+  if (!c.stepConfirmed) return;
+  const step = c.plan.steps[c.stepIdx];
+  if (!step) return;
+
+  resetIdleTimer();
+
+  const expected = getExpectedDigits(step);
+  const cellIds = getInputCellIds(step);
+  const bufIdx = c.inputBuffer.length;
+
+  if (String(num) === expected[bufIdx]) {
+    c.inputBuffer.push(String(num));
+    const cellId = cellIds[bufIdx];
+    const cell = document.getElementById(cellId);
+    if (cell) {
+      cell.textContent = num;
+      cell.classList.add('correct-pop', 'fade-in');
+      setTimeout(() => cell.classList.remove('correct-pop'), 500);
+
+      // hikuで結果が0かつ1桁、かつ最終ステージでない場合は薄く表示(「0X」誤読防止)
+      if (step.kind === 'hiku' && num === 0 && expected.length === 1) {
+        const isLastStage = c.plan.activeStages[c.plan.activeStages.length - 1] === step.position;
+        if (!isLastStage) cell.classList.add('faded');
+      }
+    }
+
+    if (c.inputBuffer.length === expected.length) {
+      if (step.kind === 'kakeru') {
+        const sub = document.getElementById(`subline-${step.position}`);
+        if (sub) sub.style.display = 'block';
+      }
+      advanceStep();
+    }
+  } else {
+    const cellId = cellIds[bufIdx];
+    const cell = document.getElementById(cellId);
+    if (cell) {
+      cell.classList.add('error');
+      setTimeout(() => cell.classList.remove('error'), 1200);
+    }
+    const numBtn = document.querySelector(`.num-btn[data-num="${num}"]`);
+    if (numBtn) {
+      numBtn.classList.add('wrong');
+      setTimeout(() => numBtn.classList.remove('wrong'), 600);
+    }
+    c.errorCount++;
+    triggerHintAttention();
+  }
+}
+
+/* あまりの一の位に「0」を入力するフェーズの処理。
+   正しく「0」を押したら 0.３ の形にして問題完了へ。 */
+function handleRemainderZeroInput(num) {
+  const c = state.current;
+  resetIdleTimer();
+  if (num === 0) {
+    const cell = document.getElementById(c._remZeroCellId);
+    if (cell) {
+      cell.textContent = '0';
+      cell.classList.remove('spot');
+      cell.classList.add('correct-pop', 'fade-in');
+      setTimeout(() => cell.classList.remove('correct-pop'), 500);
+    }
+    c.phase = 'done';
+    clearSpotlight();
+    setTimeout(() => finishProblem(), 300);
+  } else {
+    const cell = document.getElementById(c._remZeroCellId);
+    if (cell) {
+      cell.classList.add('error');
+      setTimeout(() => cell.classList.remove('error'), 1200);
+    }
+    const numBtn = document.querySelector(`.num-btn[data-num="${num}"]`);
+    if (numBtn) {
+      numBtn.classList.add('wrong');
+      setTimeout(() => numBtn.classList.remove('wrong'), 600);
+    }
+    c.errorCount++;
+    triggerHintAttention();
+  }
+}
+
+function advanceStep() {
+  const c = state.current;
+  c.stepConfirmed = false;
+  c.inputBuffer = [];
+  c.stepIdx++;
+  clearSpotlight();
+  if (c.stepIdx >= c.plan.steps.length) {
+    if (c.needsRemainderPoint && c.remainderPt === null) {
+      enterRemainderPointPhase();
+    } else {
+      finishProblem();
+    }
+  } else {
+    // 次のステップを自動開始(おろすは自動、計算ステップは入力待ち)
+    setTimeout(() => beginStep(), 250);
+  }
+}
+
+function finishProblem() {
+  const c = state.current;
+  c.completed = true;
+  c.stepConfirmed = false;
+  enableNumpad(false);
+  hideGuide();
+  if (c.errorCount <= 1) state.correctCount++;
+  document.getElementById('correctDisplay').textContent = state.correctCount;
+  clearIdleTimer();
+  showRemainderTag();
+  showCorrectMark();
+}
+
+function showRemainderTag() {
+  const c = state.current;
+  if (!c || c.plan.finalRemainder === 0) return;
+  // 類型5(あまりレベル)は、あまりを筆算上に小数点付きで表示済みなのでタグ不要。
+  if (c.dec && c.dec.stopMode) return;
+  // dividend row（row=1）の右側にあまりを表示
+  // ※ 簡易的に右下に表示
+  const div = document.getElementById('division');
+  const cell = getCellSize();
+  const tag = document.createElement('div');
+  tag.className = 'remainder-tag';
+  tag.innerHTML = `<span class="label">あまり</span><span class="value">${c.plan.finalRemainder}</span>`;
+  tag.style.left = ((c.BR + c.n + 0.3) * cell) + 'px';
+  tag.style.top  = (1 * cell + cell * 0.3) + 'px';
+  div.appendChild(tag);
+}
+
+/* ---------- 正解マーク表示 ---------- */
+function showCorrectMark() {
+  const maru = document.getElementById('bigMaru');
+  const nextBtn = document.getElementById('nextQBtn');
+
+  maru.style.display = 'flex';
+
+  // 筆算に重ならないように赤丸・せいかいテキストの位置とサイズを決める
+  positionCorrectMark();
+
+  // SVGラップのアニメ
+  const wrap = maru.querySelector('.maru-svg-wrap');
+  if (wrap) {
+    wrap.style.animation = 'none';
+    void wrap.offsetWidth;
+    wrap.style.animation = 'maruDraw 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) forwards';
+  }
+  // 円のstrokeアニメ
+  const circle = maru.querySelector('circle');
+  if (circle) {
+    circle.style.animation = 'none';
+    void circle.offsetWidth;
+    circle.style.animation = 'maruStroke 0.7s ease-out forwards';
+  }
+  // 「せいかい！」テキストのアニメ
+  const seikai = maru.querySelector('.seikai-text');
+  if (seikai) {
+    seikai.style.animation = 'none';
+    void seikai.offsetWidth;
+    seikai.style.animation = 'textPop 0.4s 0.6s forwards';
+  }
+
+  // 「つぎへ」ボタンを表示
+  nextBtn.style.animation = 'none';
+  void nextBtn.offsetWidth;
+  nextBtn.style.animation = 'nextBtnIn 0.5s 0.8s both';
+  nextBtn.classList.add('show');
+
+  nextBtn.onclick = goNextQuestion;
+}
+
+/* 正解マーク(○・せいかい！)を筆算に重ならない空きスペースに配置する。
+   筆算(#division)の領域を取得し、
+   - 「下側の空き高さ」と「右側の空き幅」を比べ、広い方の空きエリアに配置
+   - そのエリアの短辺に収まるよう赤丸のサイズを決める
+   さらに「つぎのもんだいへ」ボタンも筆算の最下端より下に来るよう調整する */
+function positionCorrectMark() {
+  const maru = document.getElementById('bigMaru');
+  const wrap = maru.querySelector('.maru-svg-wrap');
+  const panel = document.getElementById('calcPanel');
+  const division = document.getElementById('division');
+  if (!maru || !wrap || !panel || !division) return;
+
+  const pw = panel.clientWidth;
+  const ph = panel.clientHeight;
+
+  // 筆算の領域 (calcPanel内のローカル座標)
+  const divLeft   = parseFloat(division.style.left) || 0;
+  const divTop    = parseFloat(division.style.top)  || 0;
+  const divWidth  = parseFloat(division.style.width)  || division.clientWidth;
+  const divHeight = parseFloat(division.style.height) || division.clientHeight;
+  const divRight  = divLeft + divWidth;
+  const divBottom = divTop + divHeight;
+
+  const PAD = 12; // 筆算とマークの間の最小余白(px)
+
+  // 空きエリア候補: 下側 と 右側
+  const belowH = ph - divBottom;        // 筆算の下の空き高さ
+  const rightW = pw - divRight;         // 筆算の右の空き幅
+
+  // 赤丸が確保できる最大の正方形サイズを各エリアで算出
+  // 下側エリア: 幅=パネル全幅, 高さ=belowH
+  const belowSize = Math.min(pw * 0.9, Math.max(0, belowH - PAD * 2));
+  // 右側エリア: 幅=rightW, 高さ=パネル全高
+  const rightSize = Math.min(ph * 0.75, Math.max(0, rightW - PAD * 2));
+
+  // マーク本体(○+せいかい)を absolute なボックスとして配置する設定にする
+  maru.style.inset = 'auto';
+  maru.style.justifyContent = 'center';
+  maru.style.alignItems = 'center';
+
+  let boxLeft, boxTop, boxW, boxH, size;
+
+  if (belowSize >= rightSize && belowSize >= 80) {
+    // 下側に配置
+    size = belowSize;
+    boxW = pw;
+    boxH = belowH;
+    boxLeft = 0;
+    boxTop = divBottom;
+  } else if (rightSize >= 80) {
+    // 右側に配置
+    size = rightSize;
+    boxW = rightW;
+    boxH = ph;
+    boxLeft = divRight;
+    boxTop = 0;
+  } else {
+    // どちらの余白も狭い場合: パネル全体に小さめ表示(従来挙動に近いフォールバック)
+    size = Math.min(pw, ph) * 0.5;
+    boxW = pw;
+    boxH = ph;
+    boxLeft = 0;
+    boxTop = 0;
+  }
+
+  maru.style.left   = boxLeft + 'px';
+  maru.style.top    = boxTop + 'px';
+  maru.style.width  = boxW + 'px';
+  maru.style.height = boxH + 'px';
+
+  // 赤丸サイズを設定(せいかいテキストの分を少し残す)
+  const circleSize = Math.max(60, size * 0.78);
+  wrap.style.width  = circleSize + 'px';
+  wrap.style.height = circleSize + 'px';
+  wrap.style.maxWidth  = '95%';
+  wrap.style.maxHeight = '70%';
+
+  // 「つぎのもんだいへ」ボタンを筆算の最下端より下に置く
+  // (筆算が縦に長い問題で、ボタンが筆算に重なるのを防ぐ)
+  const nextBtn = document.getElementById('nextQBtn');
+  if (nextBtn) {
+    // ボタン高さ概算(レンダリング前なので一旦表示して測る)
+    const prevDisplay = nextBtn.style.display;
+    nextBtn.style.visibility = 'hidden';
+    nextBtn.style.display = 'block';
+    const btnH = nextBtn.offsetHeight || 56;
+    nextBtn.style.display = prevDisplay;
+    nextBtn.style.visibility = '';
+
+    // 筆算下端 + 余白 を基準にしつつ、パネル下端からはみ出さない位置に
+    const desiredTop = divBottom + PAD;
+    const maxTop = ph - btnH - PAD;
+    let btnTop = Math.min(desiredTop, maxTop);
+    // 下側にマークを置いた場合は、マークとボタンが重ならないよう最下部へ寄せる
+    if (boxTop === divBottom && boxLeft === 0) {
+      btnTop = ph - btnH - PAD;
+    }
+    if (btnTop < PAD) btnTop = PAD;
+    nextBtn.style.bottom = 'auto';
+    nextBtn.style.top = btnTop + 'px';
+  }
+}
+
+function goNextQuestion() {
+  const maru = document.getElementById('bigMaru');
+  const nextBtn = document.getElementById('nextQBtn');
+  maru.style.display = 'none';
+  nextBtn.classList.remove('show');
+  // 次回の正解時に positionCorrectMark で再計算できるよう、
+  // 動的に設定したインラインスタイルをクリアしておく
+  maru.style.left = '';
+  maru.style.top = '';
+  maru.style.width = '';
+  maru.style.height = '';
+  maru.style.inset = '';
+  nextBtn.style.top = '';
+  nextBtn.style.bottom = '';
+
+  state.qIdx++;
+  if (state.qIdx >= state.questions.length) {
+    showResults();
+  } else {
+    loadQuestion();
+  }
+}
+
+/* ---------- NUMPAD ENABLE ---------- */
+function enableNumpad(on) {
+  const pad = document.getElementById('numpadPanel');
+  if (on) pad.classList.remove('disabled');
+  else pad.classList.add('disabled');
+}
+
+/* ---------- LOAD QUESTION ---------- */
+function loadQuestion() {
+  const q = state.questions[state.qIdx];
+  const dividendStr = String(q[0]), divisorStr = String(q[1]);
+  const srcLv = (q[2] !== undefined) ? q[2] : state.level;
+  state.currentSrcLevel = srcLv;
+
+  // 小数を「ひっ算の並び・小数点移動」に変換
+  const lvlDef = LEVELS[srcLv] || {};
+  const stopPlaces = (typeof lvlDef.stopPlaces === 'number') ? lvlDef.stopPlaces : undefined;
+  const dec = analyzeDecimal(dividendStr, divisorStr, stopPlaces);
+  // 整数部の商が0でも一の位に「0」を立てさせる(類型1の壁: 2÷5=0.4 の先頭0)
+  const forceFirstPos = Math.max(0, dec.quotientPointBefore - 1);
+  // 実際に割り算する整数の数字列で計算プランを作る
+  const plan = buildPlan(dec.calcDigits, dec.intDivisor, forceFirstPos);
+
+  // この問題で「小数点の移動」が必要か
+  //  - shift > 0 : わる数が小数 → わる数・わられる数の点を動かす(類型3,4)
+  const needsShift = dec.shift > 0;
+
+  // 商の小数点を打つ必要があるか(整数商なら点は不要)。
+  // 移動後の被除数の桁数(calcDigits)が、小数点位置(quotientPointBefore)より多い
+  // = 小数点より右に商の桁が並ぶ = 小数の商。浮動小数の誤差を避け整数演算で判定。
+  let quotientHasPoint = dec.calcDigits.length > dec.quotientPointBefore;
+  // 類型3・4は、商が整数になっても「小数点の打ち上げ」操作を必ず体験させる。
+  //  小数点を動かしたあと、移動後の小数点を真上に打ち上げる(=右端に商の点を打つ)。
+  if (srcLv === 3 || srcLv === 4) quotientHasPoint = true;
+  // 類型5(あまりレベル)は、被除数を小数第1位まで割るので商は必ず小数 → 点を打つ。
+  if (dec.stopMode) quotientHasPoint = true;
+
+  // この問題で「あまりの小数点」をスワイプして打つか(類型5)。
+  // あまりが0でないときのみ(0なら割り切れなのであまり点は不要)。
+  const needsRemainderPoint = dec.stopMode && dec.finalRemainder !== 0;
+
+  // 被除数が小数か(小数点が最初から見えているか)
+  const dividendIsDecimal = (dividendStr.indexOf('.') !== -1);
+  // 除数が小数か
+  const divisorIsDecimal = (divisorStr.indexOf('.') !== -1);
+
+  // 商の小数点を打つ前に「元の小数点の位置を探す」操作を入れるか。
+  //  レベル1: 1〜2問目は探さない(点を最初から薄く表示)、3問目以降は探す。
+  //  レベル4: 探す(被除数の隠れた点を見つける)。
+  //  レベル2・3: 探さない(被除数の点は見えている/移動済み)。
+  let findHidden = false;
+  if (srcLv === 1) findHidden = (state.qIdx >= 2);          // 3問目(index2)以降
+  else if (srcLv === 4) findHidden = !dividendIsDecimal;    // 被除数が整数なら探す
+
+  // ガイド番号付け用: この問題で順に通る手順
+  const guideSteps = [];
+  if (needsShift) { guideSteps.push('shiftDivisor'); guideSteps.push('shiftDividend'); }
+  if (quotientHasPoint) guideSteps.push('placeQuotientPoint');
+  guideSteps.push('calc');
+  if (needsRemainderPoint) guideSteps.push('placeRemainderPoint');
+
+  // あまりの整数部が0(「.３」)になる場合、一の位に0を入れる手順を追加。
+  let needsRemainderZero = false;
+  if (needsRemainderPoint) {
+    const onesCol = dec.quotientPointBefore - 1;
+    if (onesCol >= 0) {
+      const lastStage = plan.activeStages[plan.activeStages.length - 1];
+      const remLen = String(plan.stageData[lastStage].remainder).length || 1;
+      const remLeftCol = plan.stageData[lastStage].partialEnd - remLen + 1;
+      needsRemainderZero = remLeftCol > onesCol;
+    }
+  }
+  if (needsRemainderZero) guideSteps.push('inputRemainderZero');
+
+  state.current = {
+    dividendStr, divisorStr, dec, plan,
+    digits: plan.digits, n: plan.n,
+    divisor: dec.intDivisor,
+    srcLv,
+    guideSteps,
+    findHidden,
+    quotientFound: false,     // 隠れた点を見つけたか
+    // フェーズ: 'shiftDivisor' → 'shiftDividend' → 'placeQuotientPoint' → 'calc' → 'done'
+    phase: needsShift ? 'shiftDivisor' : 'placeQuotientPoint',
+    needsShift,
+    quotientHasPoint,
+    needsRemainderPoint,
+    remainderPt: null,          // あまりの小数点の境界位置(打ったらセット)
+    dividendIsDecimal, divisorIsDecimal,
+    // 小数点の現在の境界位置(その点の左にある数字の個数)。null=まだ点が無い。
+    divisorPt: divisorIsDecimal ? dec.divisorPointBefore : null,
+    // わられる数: 小数なら元の位置に表示。整数で「探す」設定なら隠す(null)。
+    // 整数で探さない(L1の1〜2問目)なら、一の位の右下に最初から表示してスワイプさせる。
+    dividendPt: dividendIsDecimal ? dec.dividendPointBefore
+                : (findHidden ? null : dec.dividendPointBefore),
+    quotientPt: null,
+    divisorStart: dec.divisorPointBefore,
+    dividendStart: dec.dividendPointBefore,
+    stepIdx: 0, stepConfirmed: false, inputBuffer: [],
+    errorCount: 0, completed: false,
+    hintRequested: false
+  };
+
+  document.getElementById('qNumDisplay').textContent = state.qIdx + 1;
+  document.getElementById('qTotalDisplay').textContent = state.questions.length;
+  updateCalcHintButton();
+  renderDivision();
+  enableNumpad(false);          // 点の移動が終わるまでテンキーは無効
+  clearSpotlight();
+  startPhase();                 // 現在フェーズの案内を出す
+  resetIdleTimer();
+}
+
+/* 計算ヒントボタン (💡) の状態を更新
+   - ランダムモード: 完全に非表示 (ヒント機能も九九表機能も使わない)
+   - 固定モード: 常時表示、active/attention クラスのみ問題に応じて切り替え */
+function updateCalcHintButton() {
+  const btn = document.getElementById('hintBtn');
+  if (!btn) return;
+  // 新問題開始時は active/attention 解除
+  btn.classList.remove('attention', 'active');
+  // ランダムモードでは非表示
+  if (state.mode === 'random') {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = '';
+  }
+}
+
+/* ---------- アイドル検知 ---------- */
+let idleTimer = null;
+const IDLE_MS = 10000; // 10秒
+function resetIdleTimer() {
+  if (idleTimer) clearTimeout(idleTimer);
+  // 既にヒント要求済みなら点滅させる必要なし
+  if (!state.current || state.current.hintRequested) return;
+  const qNum = state.qIdx + 1;
+  // 固定モードかつ4〜5問目のみ点滅対象
+  if (state.mode !== 'fixed' || qNum <= 3) return;
+  idleTimer = setTimeout(() => {
+    triggerHintAttention();
+  }, IDLE_MS);
+}
+
+function clearIdleTimer() {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
+}
+
+/* ヒントボタンに「ここを押して」と気づかせる点滅 */
+function triggerHintAttention() {
+  const btn = document.getElementById('hintBtn');
+  if (!btn) return;
+  // 既に要求済みなら点滅不要
+  if (state.current && state.current.hintRequested) return;
+  // 固定モードかつ4〜5問目のみ点滅対象
+  const qNum = state.qIdx + 1;
+  if (state.mode !== 'fixed' || qNum <= 3) return;
+  btn.classList.add('attention');
+}
+
+/* ---------- BUILD QUESTION SET ---------- */
+function buildQuestionSet() {
+  const lvl = LEVELS[state.level];
+
+  if (state.mode === 'fixed') {
+    // [被除数, 除数] に出題元レベルを付けて [d, v, srcLv] 形式に統一
+    state.questions = lvl.fixed.slice(0, QUESTIONS_PER_LEVEL)
+      .map(q => [q[0], q[1], state.level]);
+  } else {
+    state.questions = [];
+    const seen = new Set();
+    let guard = 0;
+    while (state.questions.length < QUESTIONS_PER_LEVEL && guard < 1000) {
+      guard++;
+      const q = lvl.randomGen();
+      const key = q.join(',');
+      if (!seen.has(key)) { seen.add(key); state.questions.push([q[0], q[1], state.level]); }
+    }
+  }
+  state.qIdx = 0;
+  state.correctCount = 0;
+  document.getElementById('correctDisplay').textContent = 0;
+  document.getElementById('levelDisplay').textContent = lvl.badge || state.level;
+}
+
+/* ---------- SCREEN MANAGEMENT ---------- */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ---------- TITLE SCREEN SETUP ---------- */
+const LEVEL_COUNT = 5;
+function setupTitleScreen() {
+  const grid = document.getElementById('levelGrid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= LEVEL_COUNT; i++) {
+    const lvl = LEVELS[i];
+    const card = document.createElement('button');
+    card.className = 'level-card';
+    if (lvl.challenge) card.className += ' challenge';
+    card.dataset.level = i;
+
+    const badge = lvl.badge || String(i);
+    card.innerHTML = `
+      <div class="lv-num"><small>レベル</small>${badge}</div>
+      <div class="lv-title">${lvl.title}</div>
+      <div class="lv-desc">${lvl.desc.replace('\n', '<br>')}</div>
+    `;
+    card.onclick = () => {
+      document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      state.level = i;
+      updateStartBtn();
+    };
+    grid.appendChild(card);
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.mode = btn.dataset.mode;
+    };
+  });
+
+  document.getElementById('startBtn').onclick = () => {
+    if (!state.level) return;
+    buildQuestionSet();
+    showScreen('mainScreen');
+    // レイアウトを正確に計算するため少し待つ
+    requestAnimationFrame(() => loadQuestion());
+  };
+}
+
+function updateStartBtn() {
+  document.getElementById('startBtn').disabled = !state.level;
+}
+
+/* ---------- KUKU TABLE ---------- */
+function buildKukuTable() {
+  const tbl = document.getElementById('kukuTable');
+  tbl.innerHTML = '';
+  const corner = document.createElement('div');
+  corner.className = 'kuku-cell kuku-header';
+  corner.textContent = '×';
+  tbl.appendChild(corner);
+  for (let c = 1; c <= 9; c++) {
+    const h = document.createElement('div');
+    h.className = 'kuku-cell kuku-header';
+    h.textContent = c;
+    tbl.appendChild(h);
+  }
+  for (let r = 1; r <= 9; r++) {
+    const rh = document.createElement('div');
+    rh.className = 'kuku-cell kuku-row-header';
+    rh.textContent = r;
+    tbl.appendChild(rh);
+    for (let c = 1; c <= 9; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'kuku-cell';
+      cell.textContent = r * c;
+      tbl.appendChild(cell);
+    }
+  }
+}
+
+/* ---------- CALCULATOR ----------
+   ヒントボタンのタップで電卓モーダルを開く。
+   「いまの けいさん」ボタンで、現在処理中のステップの式を電卓に流し込める。 */
+
+/* 現在のステップで処理している計算式を返す。
+   返り値: { display: 表示用文字列(例 "60 ÷ 12"), expr: 電卓に入れる式(例 "60/12") }
+   計算対象が無い(おろす/問題なし)場合は null。 */
+function getCurrentCalcExpression() {
+  const c = state.current;
+  if (!c || !c.plan) return null;
+  const step = c.plan.steps[c.stepIdx];
+  if (!step) return null;
+  const stage = c.plan.stageData[step.position];
+
+  if (step.kind === 'tateru') {
+    return { display: `${step.partial} ÷ ${c.divisor}`, expr: `${step.partial}/${c.divisor}` };
+  }
+  if (step.kind === 'kakeru') {
+    const tateruStep = c.plan.steps.filter(s => s.kind === 'tateru' && s.position === step.position)[0];
+    const q = tateruStep ? tateruStep.value : null;
+    if (q === null) return null;
+    return { display: `${q} × ${c.divisor}`, expr: `${q}*${c.divisor}` };
+  }
+  if (step.kind === 'hiku') {
+    return { display: `${step.partial} − ${stage.product}`, expr: `${step.partial}-${stage.product}` };
+  }
+  // orosu: 計算ではないので電卓の自動入力対象外
+  return null;
+}
+
+/* 電卓の状態と挙動 */
+const calc = {
+  expr: '',        // 現在入力中の式 (内部表現: / * - + を使用)
+  justEvaluated: false,
+};
+
+function calcDisplayText() {
+  if (calc.expr === '') return '0';
+  // 内部記号を見やすい記号に変換して表示
+  return calc.expr
+    .replace(/\//g, ' ÷ ')
+    .replace(/\*/g, ' × ')
+    .replace(/-/g, ' − ')
+    .replace(/\+/g, ' ＋ ');
+}
+
+function renderCalc() {
+  const d = document.getElementById('calcDisplay');
+  if (d) d.textContent = calcDisplayText();
+}
+
+function calcAppendDigit(ch) {
+  // 直前に=で計算した直後に数字を押したら、新しい式として開始
+  if (calc.justEvaluated) { calc.expr = ''; calc.justEvaluated = false; }
+  // 小数点の重複を簡易に防ぐ(現在の数値内に既に . があれば無視)
+  if (ch === '.') {
+    const lastNum = calc.expr.split(/[+\-*/]/).pop();
+    if (lastNum.indexOf('.') !== -1) return;
+    if (lastNum === '') calc.expr += '0';
+  }
+  calc.expr += ch;
+  renderCalc();
+}
+
+function calcAppendOp(op) {
+  if (calc.expr === '') {
+    // マイナスのみ先頭許可
+    if (op === '-') { calc.expr = '-'; renderCalc(); }
+    return;
+  }
+  calc.justEvaluated = false;
+  const last = calc.expr.slice(-1);
+  if ('+-*/'.includes(last)) {
+    // 直前が演算子なら置き換え
+    calc.expr = calc.expr.slice(0, -1) + op;
+  } else {
+    calc.expr += op;
+  }
+  renderCalc();
+}
+
+function calcClear() {
+  calc.expr = '';
+  calc.justEvaluated = false;
+  renderCalc();
+}
+
+function calcBack() {
+  if (calc.justEvaluated) { calcClear(); return; }
+  calc.expr = calc.expr.slice(0, -1);
+  renderCalc();
+}
+
+function calcEquals() {
+  if (calc.expr === '') return;
+  // 末尾が演算子なら除去
+  let e = calc.expr;
+  while (e.length && '+-*/.'.includes(e.slice(-1))) e = e.slice(0, -1);
+  if (e === '') return;
+  // 安全な評価: 数字・演算子・小数点・空白のみ許可
+  if (!/^[0-9+\-*/.\s]+$/.test(e)) return;
+  let result;
+  try {
+    // eslint-disable-next-line no-new-func
+    result = Function('"use strict";return (' + e + ')')();
+  } catch (err) { return; }
+  if (typeof result !== 'number' || !isFinite(result)) return;
+  // 浮動小数点の誤差を丸める(小数第6位まで)
+  result = Math.round(result * 1e6) / 1e6;
+  calc.expr = String(result);
+  calc.justEvaluated = true;
+  renderCalc();
+}
+
+/* 「いまの けいさん」ボタンの表示を現在ステップに合わせて更新 */
+function updateCalcNowButton() {
+  const nowBtn = document.getElementById('calcNow');
+  if (!nowBtn) return;
+  const info = getCurrentCalcExpression();
+  if (info) {
+    nowBtn.textContent = `いまの けいさん：${info.display}`;
+    nowBtn.classList.remove('empty');
+    nowBtn.dataset.expr = info.expr;
+  } else {
+    nowBtn.textContent = 'いまは けいさんの ばめんじゃ ないよ';
+    nowBtn.classList.add('empty');
+    delete nowBtn.dataset.expr;
+  }
+}
+
+/* 電卓モーダルを開く */
+function openCalcModal() {
+  calcClear();
+  updateCalcNowButton();
+  document.getElementById('calcModal').classList.add('active');
+}
+
+function setupCalcModal() {
+  const modal = document.getElementById('calcModal');
+  if (!modal) return;
+  document.getElementById('calcCloseBtn').onclick = () => modal.classList.remove('active');
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+
+  // 「いまの けいさん」ボタン: 現在の式を電卓に流し込む
+  document.getElementById('calcNow').onclick = function() {
+    const expr = this.dataset.expr;
+    if (!expr) return;
+    calc.expr = expr;
+    calc.justEvaluated = false;
+    renderCalc();
+  };
+
+  // 数字・小数点
+  modal.querySelectorAll('.calc-key[data-d]').forEach(b => {
+    b.onclick = () => calcAppendDigit(b.dataset.d);
+  });
+  // 演算子
+  modal.querySelectorAll('.calc-key[data-op]').forEach(b => {
+    b.onclick = () => calcAppendOp(b.dataset.op);
+  });
+  // 機能キー
+  modal.querySelectorAll('.calc-key[data-act]').forEach(b => {
+    const act = b.dataset.act;
+    b.onclick = () => {
+      if (act === 'clear') calcClear();
+      else if (act === 'back') calcBack();
+      else if (act === 'equals') calcEquals();
+    };
+  });
+
+  renderCalc();
+}
+
+/* ---------- HINT MODAL ---------- */
+function setupHintModal() {
+  const modal = document.getElementById('hintModal');
+  const btn = document.getElementById('hintBtn');
+  document.getElementById('hintCloseBtn').onclick = () => modal.classList.remove('active');
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+
+  /* 💡ボタンのタップ/長押し処理
+     - タップ (短く押す): 計算ヒントON (固定モード4〜5問目で有効)
+     - 長押し (500ms以上): 九九表モーダル表示 */
+  const LONG_PRESS_MS = 500;
+  let pressTimer = null;
+  let longPressed = false;
+
+  function startPress(e) {
+    e.preventDefault();
+    longPressed = false;
+    btn.classList.add('pressing');
+    pressTimer = setTimeout(() => {
+      // 長押し → 九九表表示
+      longPressed = true;
+      btn.classList.remove('pressing');
+      modal.classList.add('active');
+      // 触覚フィードバック (対応端末のみ)
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, LONG_PRESS_MS);
+  }
+  function endPress(e) {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    btn.classList.remove('pressing');
+    if (longPressed) return; // 長押し済みならタップ処理しない
+    // タップ処理: 計算ヒントON
+    handleHintButtonTap();
+  }
+  function cancelPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    btn.classList.remove('pressing');
+    longPressed = true; // タップとして処理されないようにする
+  }
+
+  // タッチ/マウス両対応
+  btn.addEventListener('touchstart', startPress, { passive: false });
+  btn.addEventListener('touchend', endPress);
+  btn.addEventListener('touchcancel', cancelPress);
+  btn.addEventListener('mousedown', startPress);
+  btn.addEventListener('mouseup', endPress);
+  btn.addEventListener('mouseleave', cancelPress);
+}
+
+/* タップ時の処理: 電卓を開く(+従来の計算ヒント要求も維持) */
+function handleHintButtonTap() {
+  if (!state.current) return;
+
+  // 電卓モーダルを開く
+  openCalcModal();
+
+  // 従来どおり、固定モードの4〜5問目では計算ヒントも有効化する
+  const qNum = state.qIdx + 1;
+  if (state.mode === 'fixed' && qNum > 3) {
+    state.current.hintRequested = true;
+    const btn = document.getElementById('hintBtn');
+    btn.classList.remove('attention');
+    btn.classList.add('active');
+    clearIdleTimer();
+    if (state.current.stepConfirmed) {
+      const step = state.current.plan.steps[state.current.stepIdx];
+      if (step) showHintForStep(step);
+    }
+  }
+}
+
+/* ---------- RESULT SCREEN ---------- */
+function showResults() {
+  showScreen('resultScreen');
+  const correct = state.correctCount;
+  const total = state.questions.length;
+  document.getElementById('resultCorrect').textContent = correct;
+  document.getElementById('resultTotal').textContent = total;
+  const pct = correct / total;
+  let emoji, title, msg;
+  if (pct === 1) {
+    emoji = '🏆'; title = 'パーフェクト！'; msg = 'すごい！ぜんもん せいかい だよ！';
+  } else if (pct >= 0.8) {
+    emoji = '🌟'; title = 'よくできました！'; msg = 'もう ちょっとで パーフェクト！';
+  } else if (pct >= 0.5) {
+    emoji = '😊'; title = 'がんばったね！'; msg = 'この ちょうしで れんしゅう しよう！';
+  } else {
+    emoji = '💪'; title = 'もう いっかい!'; msg = 'まちがえても だいじょうぶ！れんしゅう が だいじ！';
+  }
+  document.getElementById('resultEmoji').textContent = emoji;
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultMsg').textContent = msg;
+  if (pct >= 0.8) launchConfetti();
+}
+
+function launchConfetti() {
+  const container = document.getElementById('confetti');
+  container.innerHTML = '';
+  const colors = ['#f08a3e', '#4a90c8', '#5a9f6b', '#f5c842', '#e85a4f', '#8a6fb0'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDuration = (2 + Math.random() * 2) + 's';
+    piece.style.animationDelay = Math.random() * 0.8 + 's';
+    piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+    if (Math.random() > 0.5) piece.style.borderRadius = '50%';
+    container.appendChild(piece);
+  }
+  setTimeout(() => container.innerHTML = '', 5000);
+}
+
+/* ---------- WIRE UP MAIN SCREEN ---------- */
+function setupMainScreen() {
+  document.querySelectorAll('.num-btn').forEach(btn => {
+    btn.onclick = () => handleNumClick(parseInt(btn.dataset.num, 10));
+  });
+  document.getElementById('skipBtn').onclick = () => {
+    if (!state.current) return;
+    // 正解マーク表示中(完了済み)は「つぎへ」ボタンを使うのでスキップ無効
+    if (state.current.completed) return;
+    // スキップした問題は不正解扱い(正解カウントしない)で次の問題へ
+    clearIdleTimer();
+    const maru = document.getElementById('bigMaru');
+    const nextBtn = document.getElementById('nextQBtn');
+    maru.style.display = 'none';
+    nextBtn.classList.remove('show');
+    maru.style.left = ''; maru.style.top = '';
+    maru.style.width = ''; maru.style.height = ''; maru.style.inset = '';
+    nextBtn.style.top = ''; nextBtn.style.bottom = '';
+
+    state.qIdx++;
+    if (state.qIdx >= state.questions.length) {
+      showResults();
+    } else {
+      loadQuestion();
+    }
+  };
+  bindTap(document.getElementById('backBtn'), () => {
+    if (confirm('タイトルへ もどりますか？ いまの もんだいは リセットされます。')) {
+      const maru = document.getElementById('bigMaru');
+      const nextBtn = document.getElementById('nextQBtn');
+      maru.style.display = 'none';
+      nextBtn.classList.remove('show');
+      maru.style.left = ''; maru.style.top = '';
+      maru.style.width = ''; maru.style.height = ''; maru.style.inset = '';
+      nextBtn.style.top = ''; nextBtn.style.bottom = '';
+      clearIdleTimer();
+      showScreen('titleScreen');
+    }
+  });
+}
+
+function setupResultScreen() {
+  document.getElementById('resultHomeBtn').onclick = () => showScreen('titleScreen');
+  document.getElementById('resultRetryBtn').onclick = () => {
+    buildQuestionSet();
+    showScreen('mainScreen');
+    requestAnimationFrame(() => loadQuestion());
+  };
+}
+
+/* ---------- WINDOW RESIZE ----------
+   画面サイズが変わってもひっ算の数字とマス目の整列を保つため、
+   現在の表示内容をスナップショット → 再描画 → 復元 を行う */
+let resizeTimer = null;
+function handleResize() {
+  if (!state.current) return;
+  const mainActive = document.getElementById('mainScreen').classList.contains('active');
+  if (!mainActive) return;
+  if (state.current.completed) {
+    // 正解表示中は筆算は再描画しないが、マークの位置は画面サイズに合わせて再計算する
+    if (document.getElementById('bigMaru').style.display === 'flex') {
+      positionCorrectMark();
+    }
+    return;
+  }
+  // 小数点移動フェーズ中は、再描画後に状態(点位置・出した桁)を復元して操作を再装着
+  const c = state.current;
+  // あまりの小数点フェーズ: 計算結果を復元してから、あまりスワイプを再装着
+  if (c.phase === 'placeRemainderPoint') {
+    const snap = captureDivisionSnapshot();
+    renderDivision();
+    applyDivisionSnapshot(snap);
+    renderDecimalPoints(getCellSize(), c.BR);
+    armRemainderSwipe();
+    return;
+  }
+  // あまりの0入力フェーズ: 計算結果と点を復元してスポットを再表示
+  if (c.phase === 'inputRemainderZero') {
+    const snap = captureDivisionSnapshot();
+    renderDivision();
+    applyDivisionSnapshot(snap);
+    renderDecimalPoints(getCellSize(), c.BR);
+    const target = document.getElementById(c._remZeroCellId);
+    if (target) target.classList.add('spot');
+    return;
+  }
+  if (c.phase && c.phase !== 'calc' && c.phase !== 'done') {
+    renderDivision();
+    // すでに点が通過した桁(pad-zero)は表示しておく
+    if (c.dividendPt !== null) {
+      for (let i = 0; i < c.dividendPt; i++) {
+        const d = document.getElementById(`d-${i}`);
+        if (d) d.classList.remove('hidden-digit');
+      }
+    }
+    startPhase();   // 現在の点位置からステップ円を再描画
+    return;
+  }
+  // スナップショット → 再描画 → 復元 (計算フェーズ)
+  const snap = captureDivisionSnapshot();
+  renderDivision();
+  applyDivisionSnapshot(snap);
+  // 既に出した0の桁を維持
+  document.querySelectorAll('#division .pad-zero, #division .extra-zero').forEach(z => {
+    // 値が入っている(=既に下ろした/補った)桁は表示
+  });
+  if (state.current.stepConfirmed) {
+    const step = state.current.plan.steps[state.current.stepIdx];
+    if (step) {
+      spotlightForStep(step);
+      showHintForStep(step);
+    }
+  }
+}
+window.addEventListener('resize', () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(handleResize, 100);
+});
+window.addEventListener('orientationchange', () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(handleResize, 200);
+});
+
+/* ---------- INIT ---------- */
+window.addEventListener('DOMContentLoaded', () => {
+  setupTitleScreen();
+  setupMainScreen();
+  setupResultScreen();
+  buildKukuTable();
+  setupHintModal();
+  setupCalcModal();
+});
+</script>
+</body>
+</html>
