@@ -494,6 +494,12 @@
     color: var(--line);
     opacity: 0.5;
   }
+  /* あまりの整数部の0(例: あまり「0.4」の0)。
+     「.4」に見えてしまわないよう、通常のあまりと同じ濃さではっきり表示する */
+  .cell.rem-int-zero {
+    color: var(--ink);
+    opacity: 1;
+  }
   /* わる数の余分な先頭0(例: 0.8→08.)を薄く表示 */
   .divisor-cell.faded {
     color: var(--line);
@@ -1469,7 +1475,7 @@
   <div class="title-header">
     <h1 class="app-title">小数の<span class="accent">わり算</span>ひっ算</h1>
     <p class="app-subtitle">〜 小数点を うごかして けいさん 〜</p>
-    <p class="app-version">v5</p>
+    <p class="app-version">v8</p>
   </div>
 
   <div>
@@ -1634,157 +1640,191 @@
    わりざんのひっ算アプリ - 改修版
    ============================================================ */
 
-/* ---------- LEVEL DEFINITIONS (小数のわり算 類型1〜4) ----------
+/* ---------- LEVEL DEFINITIONS (小数のわり算 レベル1〜5) ----------
    各問題は [被除数(文字列), 除数(文字列), 出題元レベル] で表す。
    文字列に小数点を含めることで、表示上の小数点をそのまま再現する。
    - randomGen は [被除数, 除数] の文字列ペアを返す。
 
-   レベルの意図 (内部キー : 表示):
-   1 : 類型1   整数 ÷ 整数 → 商が小数(割り切れる)。割り進み・小数点を打つ。
-   2 : 類型2   小数 ÷ 整数 → 小数点の打ち上げのみ。
-   3 : 類型3   小数 ÷ 小数 → 小数点の移動(基本)。
-   4 : 類型4   小数 ÷ 小数 → 0を補う小数点移動。
-   (類型5 余りのある割り算は次回実装)
+   全レベル「小数÷小数(一部 整数÷小数)」。除数は小数第1位。
+   1 : 小数÷小数  商=整数 or 小数第1位
+   2 : 小数÷小数  商=0.X(1の位0)
+   3 : 小数÷小数  商=0.XX〜0.XXX(1の位0)
+   4 : 整数÷小数  商=X.X(1の位は整数)
+   5 : 小数÷小数  商を1の位まで求めてあまりを出す
 */
 const LEVELS = {
   1: {
     title: 'レベル 1',
-    desc: 'せいすう ÷ せいすう\n商が小数になる',
+    desc: '小数 ÷ 小数\n商が 小数 か せいすう',
     badge: '1',
     decimal: true,
+    // 1〜3問目: 小数商(被除数 小数第2位) / 4〜5問目: 整数商(被除数 小数第1位)
     fixed: [
-      ['2', '5'],   // 0.4
-      ['6', '4'],   // 1.5
-      ['3', '2'],   // 1.5
-      ['9', '4'],   // 2.25
-      ['7', '5']    // 1.4
+      ['2.38', '1.7'],  // 1.4
+      ['3.84', '1.6'],  // 2.4
+      ['7.25', '2.9'],  // 2.5
+      ['7.2', '2.4'],   // 3
+      ['8.2', '4.1']    // 2
     ],
-    randomGen: () => {
-      // 整数 ÷ 整数、割り切れて商が小数(1〜2桁)、割り切れない(商が整数でない)
-      while (true) {
-        const divisor = rand(2, 8);
-        const dividend = rand(2, 30);
-        if (dividend % divisor === 0) continue;       // 商が整数なら除外
-        if (!terminates(dividend, divisor, 2)) continue; // 2桁以内で割り切れる
-        return [String(dividend), String(divisor)];
-      }
-    }
+    randomGen: () => genL1(),
+    randomGenAt: (idx) => genL1(idx < 3)  // idx<3 は小数商, それ以外 整数商
   },
   2: {
     title: 'レベル 2',
-    desc: '小数 ÷ せいすう\n小数点を打ち上げ',
+    desc: '小数 ÷ 小数\n商の 一のくらいが 0',
     badge: '2',
     decimal: true,
     fixed: [
-      ['8.4', '4'],  // 2.1
-      ['1.2', '3'],  // 0.4
-      ['9.6', '8'],  // 1.2
-      ['7.5', '5'],  // 1.5
-      ['2.8', '4']   // 0.7
+      ['5.04', '8.4'],  // 0.6
+      ['2.05', '4.1'],  // 0.5
+      ['3.6', '4.5'],   // 0.8
+      ['1.52', '1.9'],  // 0.8
+      ['2.8', '5.6']    // 0.5
     ],
-    randomGen: () => {
-      // 小数(小数第1位) ÷ 整数、割り切れる
-      while (true) {
-        const divisor = rand(2, 8);
-        const tenths = rand(11, 99);          // 1.1〜9.9 を 10倍した整数
-        const dividend = tenths / 10;
-        if (tenths % divisor === 0) {         // ぴったり割り切れる(小数第1位で完了)
-          return [dividend.toFixed(1), String(divisor)];
-        }
-      }
-    }
+    randomGen: () => genL2()
   },
   3: {
     title: 'レベル 3',
-    desc: '小数 ÷ 小数\n小数点の いどう',
+    desc: '小数 ÷ 小数\n商が 0.〇〇',
     badge: '3',
     decimal: true,
     fixed: [
-      ['2.4', '0.8'],  // 3
-      ['7.2', '1.2'],  // 6
-      ['9.2', '0.4'],  // 23
-      ['6.3', '0.7'],  // 9
-      ['4.8', '0.6']   // 8
+      ['4.8', '6.4'],   // 0.75
+      ['1.8', '7.5'],   // 0.24
+      ['3.0', '4.8'],   // 0.625
+      ['6.3', '7.5'],   // 0.84
+      ['1.32', '1.6']   // 0.825
     ],
-    randomGen: () => {
-      // 小数(第1位) ÷ 小数(第1位)。小数点を1つ右に動かすと両方とも整数になる
-      // (=被除数に0を補う必要がない)。割り切れる。
-      while (true) {
-        const divT = rand(2, 9);              // 0.2〜0.9
-        const ans = rand(2, 30);
-        const divT2 = divT;
-        const dividendT = ans * divT2;        // 被除数×10
-        if (dividendT < 10 || dividendT > 99) continue; // 被除数を1.0〜9.9に収める
-        const dividend = dividendT / 10;
-        const divisor = divT / 10;
-        return [dividend.toFixed(1), divisor.toFixed(1)];
-      }
-    }
+    randomGen: () => genL3()
   },
   4: {
     title: 'レベル 4',
-    desc: '小数 ÷ 小数\n0を おぎなう',
+    desc: 'せいすう ÷ 小数\n商が 〇.〇',
     badge: '4',
     decimal: true,
     fixed: [
-      ['6', '0.15'],   // 40
-      ['2.4', '0.08'], // 30
-      ['9', '0.36'],   // 25
-      ['4.2', '0.06'], // 70
-      ['3', '0.12']    // 25
+      ['6', '2.4'],    // 2.5
+      ['9', '3.6'],    // 2.5
+      ['57', '7.6'],   // 7.5
+      ['48', '6.4'],   // 7.5
+      ['63', '1.2']    // 52.5
     ],
-    randomGen: () => {
-      // 除数は小数第2位(0.0X 形式)。小数点を2つ動かすと、被除数の桁が足りず
-      // 右に0を補う必要があるパターン(被除数は整数 or 小数第1位)。割り切れる。
-      while (true) {
-        const divH = rand(2, 49);             // 0.02〜0.49 を 100倍した整数
-        if (divH % 10 === 0) continue;        // 0.10,0.20…(実質1桁)は除外
-        const divisor = divH / 100;
-        // 被除数は整数 or 小数第1位(=小数点を2つ動かすと0補充が必要)
-        const dividendInt = rand(1, 9);
-        const useTenth = (Math.random() < 0.5);
-        const dividend = useTenth ? (dividendInt + rand(1, 9) / 10) : dividendInt;
-        // 小数点2つ移動後の整数同士で割り切れるか
-        const a = Math.round(dividend * 100);
-        if (a % divH !== 0) continue;
-        const ans = a / divH;
-        if (ans < 2 || ans > 99) continue;
-        return [useTenth ? dividend.toFixed(1) : String(dividend), divisor.toFixed(2)];
-      }
-    }
+    randomGen: () => genL4()
   },
   5: {
     title: 'レベル 5',
-    desc: '小数 ÷ せいすう\nあまりを 出す',
+    desc: '小数 ÷ 小数\nあまりを 出す',
     badge: '5',
     decimal: true,
     challenge: true,
-    stopPlaces: 1,   // 小数第1位まで わって あまりを出す
+    stopPlaces: 0,             // 商はせいすうまで求めてあまりを出す
+    remainderAtOriginal: true, // あまりの点は「動かす前」のわられる数の位置にそろえる
+    placeQuotientPointOnRemainder: true, // 商(整数)の一の位の右にも小数点を打ち上げる操作を行う
     fixed: [
-      ['7.6', '3'],   // 2.5 あまり 0.1
-      ['9.4', '7'],   // 1.3 あまり 0.3
-      ['8.5', '6'],   // 1.4 あまり 0.1
-      ['25.3', '4'],  // 6.3 あまり 0.1
-      ['5',   '3']    // 1.6 あまり 0.2
+      ['4.9', '2.3'],   // 2 あまり 0.3
+      ['6.2', '0.8'],   // 7 あまり 0.6
+      ['17.5', '9.6'],  // 1 あまり 7.9
+      ['95', '2.7'],    // 35 あまり 0.5
+      ['340', '7.2']    // 47 あまり 1.6
     ],
-    randomGen: () => {
-      // 小数(第1位)or整数 ÷ 整数。小数第1位まで割って「あまり(0でない)」が出る
-      while (true) {
-        const divisor = rand(3, 9);
-        const useTenth = (Math.random() < 0.7);
-        const dividendInt = rand(1, 30);
-        const dividend = useTenth ? (dividendInt + rand(0, 9) / 10) : dividendInt;
-        // 小数第1位まで(=10倍した整数を割る)
-        const scaled = Math.round(dividend * 10);
-        const rem = scaled % divisor;       // 小数第1位での あまり(10倍スケール)
-        if (rem === 0) continue;            // 割り切れたら除外(あまりを出したい)
-        const q = Math.floor(scaled / divisor);
-        if (q < 10 || q > 999) continue;    // 商 1.0〜99.9 に収める
-        return [useTenth ? dividend.toFixed(1) : String(dividend), String(divisor)];
-      }
-    }
+    randomGen: () => genL5()
   }
 };
+
+/* ===== ランダム生成ロジック(JSDOM検証済み) ===== */
+// 除数末尾0(X.0)は実質整数なので除外する。
+function genL1(wantTenth) {
+  // wantTenth 未指定なら半々。
+  //  小数商 (true) : 被除数=小数第2位, 商=小数第1位(1の位>=1)  例 2.38÷1.7=1.4
+  //  整数商 (false): 被除数=小数第1位, 商=整数(2以上)          例 7.2÷2.4=3
+  // 除数はどちらも 小数第1位(整数部1以上, 1.1〜9.9, 末尾0除外)。
+  if (wantTenth === undefined) wantTenth = Math.random() < 0.5;
+  let t = 0;
+  if (wantTenth) {
+    while (t++ < 300000) {
+      const divS = rand(11, 99); if (divS % 10 === 0) continue;  // 1.1〜9.9
+      const ddS = rand(101, 999); if (ddS % 10 === 0) continue;  // 1.01〜9.99(第2位ちょうど)
+      const num = ddS, den = 10 * divS;                          // q = num/den
+      if ((num * 10) % den !== 0) continue;                      // 小数第1位で終わる
+      const q = num / den;
+      if (q === Math.round(q)) continue;                         // 整数商は除外(小数にする)
+      if (q < 1 || q > 99) continue;                             // 1の位は1以上
+      return [(ddS / 100).toFixed(2), (divS / 10).toFixed(1)];
+    }
+    return ['2.38', '1.7'];
+  } else {
+    while (t++ < 300000) {
+      const divS = rand(11, 99); if (divS % 10 === 0) continue;  // 1.1〜9.9
+      const ddS = rand(11, 99);                                  // 1.1〜9.9(第1位)
+      if (ddS % divS !== 0) continue;                            // 整数で割り切れる
+      const q = ddS / divS;
+      if (q < 2 || q > 99) continue;                             // 整数商は2以上
+      return [(ddS / 10).toFixed(1), (divS / 10).toFixed(1)];
+    }
+    return ['7.2', '2.4'];
+  }
+}
+function genL2() {
+  // 被除数=小数第1〜2位, 除数=小数第1位(整数部1以上 1.1〜9.9), 商=0.X(1の位0), 割り切れ
+  // 例 5.04÷8.4=0.6, 2.05÷4.1=0.5
+  let t = 0;
+  while (t++ < 300000) {
+    const divS = rand(11, 99); if (divS % 10 === 0) continue;  // 1.1〜9.9
+    const p = Math.random() < 0.5 ? 1 : 2;
+    const ddS = p === 1 ? rand(11, 99) : rand(101, 999);
+    const num = ddS * 10, den = Math.pow(10, p) * divS;
+    if ((num * 10) % den !== 0) continue;                      // 小数第1位で終わる
+    const q = num / den;
+    if (!(q >= 0.1 && q < 1)) continue;                        // 0.X(1の位0)
+    return [(ddS / Math.pow(10, p)).toFixed(p), (divS / 10).toFixed(1)];
+  }
+  return ['5.04', '8.4'];
+}
+function genL3() {
+  let t = 0;
+  while (t++ < 200000) {
+    const divS = rand(2, 99); if (divS % 10 === 0) continue;
+    const p = Math.random() < 0.5 ? 1 : 2;
+    const ddS = p === 1 ? rand(11, 99) : rand(101, 999);
+    const num = ddS * 10, den = Math.pow(10, p) * divS;
+    if ((num * 1000) % den !== 0) continue;                    // 小数第3位までで終わる
+    const q = num / den;
+    if (!(q >= 0.1 && q < 1)) continue;                        // 1の位0
+    const q10 = q * 10;
+    if (Math.abs(q10 - Math.round(q10)) < 1e-9) continue;      // 第1位で終わるもの(L2)は除外
+    return [(ddS / Math.pow(10, p)).toFixed(p), (divS / 10).toFixed(1)];
+  }
+  return ['4.8', '6.4'];
+}
+function genL4() {
+  let t = 0;
+  while (t++ < 200000) {
+    const divS = rand(2, 99); if (divS % 10 === 0) continue;
+    const dividend = rand(1, 99);                              // 整数
+    if ((dividend * 100) % divS !== 0) continue;               // 小数第1位で終わる
+    const q = dividend * 10 / divS;
+    if (q === Math.round(q)) continue;                         // 整数商は除外(X.Xにする)
+    if (Math.abs(q * 10 - Math.round(q * 10)) > 1e-9) continue;
+    if (!(q >= 1 && q < 100)) continue;                        // 1の位は整数(1以上)
+    return [String(dividend), (divS / 10).toFixed(1)];
+  }
+  return ['6', '2.4'];
+}
+function genL5() {
+  let t = 0;
+  while (t++ < 200000) {
+    const divS = rand(2, 99); if (divS % 10 === 0) continue;   // 0.2〜9.9(小数第1位)
+    const useTenth = Math.random() < 0.6;
+    const ddInt = rand(1, 340);                                // 1の位〜100の位
+    const ddS = useTenth ? ddInt * 10 + rand(1, 9) : ddInt * 10;
+    const A = ddS, B = divS;                                   // 小数点1つ右移動後
+    const q = Math.floor(A / B), rem = A % B;
+    if (rem === 0) continue;                                   // あまりを出したい
+    if (q < 1 || q > 99) continue;                             // 商を程よく
+    return [useTenth ? (ddS / 10).toFixed(1) : String(ddInt), (divS / 10).toFixed(1)];
+  }
+  return ['4.9', '2.3'];
+}
 
 const QUESTIONS_PER_LEVEL = 5;
 
@@ -1830,7 +1870,7 @@ const state = {
    - calcDigits        : ひっ算で実際に割り算する被除数の数字配列(整数dividendDigits + 割り進み0)
    - extraZeros        : 割り進みのために末尾に補う0の個数
    ============================================================ */
-function analyzeDecimal(dividendStr, divisorStr, stopPlaces) {
+function analyzeDecimal(dividendStr, divisorStr, stopPlaces, remainderAtOriginal) {
   function decimals(s) { const i = s.indexOf('.'); return i === -1 ? 0 : s.length - i - 1; }
   function digitsOf(s) { return s.replace('.', '').split(''); }
 
@@ -1897,6 +1937,14 @@ function analyzeDecimal(dividendStr, divisorStr, stopPlaces) {
   // 商の小数点位置(数字index): 移動後の被除数の整数部桁数 = newPointBefore
   const quotientPointBefore = newPointBefore;
 
+  // あまりの小数点の境界位置(数字index)。
+  //  - 通常(レベル5): あまりは移動後の位取りのまま → 商点と同じ位置。
+  //  - remainderAtOriginal(レベル6 小数÷小数): あまりの点は「動かす前」の
+  //    わられる数の小数点位置にそろえる = 商点より shift ぶん左 = dividendPointBefore。
+  const remainderPointBefore = remainderAtOriginal
+    ? (quotientPointBefore - shift)   // = dividendPointBefore
+    : quotientPointBefore;
+
   // 商(数字列)を求める: 計算対象の全体を整数とみなして割った商(あまりレベルは切り捨て)
   const fullDividend = parseInt(calcDigits.join(''), 10);
   const exactQuotient = stopMode
@@ -1916,7 +1964,8 @@ function analyzeDecimal(dividendStr, divisorStr, stopPlaces) {
     newPointBefore, intDivisor, intDividend,
     calcDigits, extraZeros, quotientPointBefore,
     quotientDigitsRaw, stopMode, stopPlaces: stopMode ? stopPlaces : 0,
-    finalRemainder
+    finalRemainder, remainderPointBefore,
+    remainderAtOriginal: !!remainderAtOriginal
   };
 }
 
@@ -2068,6 +2117,7 @@ function captureDivisionSnapshot() {
       snap.cells[id] = {
         text: el.textContent,
         faded: el.classList.contains('faded'),
+        remIntZero: el.classList.contains('rem-int-zero'),
         leadZero: el.classList.contains('lead-zero'),
         struck: el.classList.contains('struck')
       };
@@ -2095,6 +2145,7 @@ function applyDivisionSnapshot(snap) {
     if (el) {
       el.textContent = snap.cells[id].text;
       if (snap.cells[id].faded) el.classList.add('faded');
+      if (snap.cells[id].remIntZero) el.classList.add('rem-int-zero');
       // 元のわられる数の桁・既に下ろした桁は表示する(hidden-digitを解除)
       if (snap.cells[id].text !== '') el.classList.remove('hidden-digit');
     }
@@ -2391,7 +2442,7 @@ function guideNum(phase) {
   if (!c || !c.guideSteps) return '';
   const idx = c.guideSteps.indexOf(phase);
   if (idx < 0) return '';
-  return ['①','②','③','④','⑤','⑥'][idx] || '';
+  return ['①','②','③','④','⑤'][idx] || '';
 }
 
 function startPhase() {
@@ -2934,7 +2985,12 @@ function enterRemainderPointPhase() {
   c.phase = 'placeRemainderPoint';
   enableNumpad(false);
   const num = guideNum('placeRemainderPoint');
-  setGuide(`${num} あまりの 小数点を うとう！\nわられる数の 小数点を 下へ スワイプ`);
+  if (c.dec.remainderAtOriginal) {
+    // 小数÷小数: あまりの点は「動かす前」のわられる数の小数点位置にそろえる
+    setGuide(`${num} あまりの 小数点は\nうごかす前の いちに そろえる！\n下へ スワイプ`);
+  } else {
+    setGuide(`${num} あまりの 小数点を うとう！\nわられる数の 小数点を 下へ スワイプ`);
+  }
   renderDecimalPoints(getCellSize(), c.BR);
   armRemainderSwipe();
 }
@@ -2948,7 +3004,10 @@ function armRemainderSwipe() {
   const BR = c.BR;
   const div = document.getElementById('division');
 
-  const boundary = dec.quotientPointBefore;   // あまり点の境界(わられる数の点と同じ列)
+  // あまり点の境界列。レベル5は商点と同じ位置、レベル6(remainderAtOriginal)は
+  // 「動かす前のわられる数の小数点位置」= remainderPointBefore。
+  const boundary = (typeof dec.remainderPointBefore === 'number')
+    ? dec.remainderPointBefore : dec.quotientPointBefore;
   const remRow = getRemainderRow();
   const PT = cell * 0.16;
   const colX = (BR + boundary) * cell;            // 点の中心X
@@ -3004,18 +3063,31 @@ function armRemainderSwipe() {
   function lockRemainderPoint(){
     cleanup();
     c.remainderPt = boundary;
+    // あまりが「0.x」になる場合(整数部の桁が空)、薄い「0」を補って位取りを明確にする。
+    // あまりの最上位桁の列を求め、その左に整数部の桁(boundary-1)が無ければ0を置く。
+    if (dec.remainderAtOriginal && boundary >= 1) {
+      const remRow = getRemainderRow();
+      const intCol = boundary - 1;                 // 整数部(一の位)の列
+      const remEndCol = c.plan.stageData[c.plan.activeStages[c.plan.activeStages.length-1]].partialEnd;
+      const remStr = String(c.plan.finalRemainder);
+      const remStartCol = remEndCol - remStr.length + 1;
+      if (intCol < remStartCol) {
+        const lastStage = c.plan.activeStages[c.plan.activeStages.length-1];
+        const zc = document.getElementById(`r-${lastStage}-${intCol}`);
+        if (zc && zc.textContent === '') {
+          zc.textContent = '0';
+          // 「0.4」と読めるよう、整数部の0は通常色ではっきり表示する(薄グレーにしない)
+          zc.classList.add('rem-int-zero', 'fade-in');
+        }
+      }
+    }
     renderDecimalPoints(cell, BR);
     const rp = document.getElementById('rpt');
     if (rp) {
       rp.classList.add('rise-in');
       setTimeout(() => rp.classList.remove('rise-in'), 500);
     }
-    // あまりの整数部が0で「.３」のように見える場合は、一の位に「0」を入力させる。
-    if (needsRemainderLeadingZero()) {
-      setTimeout(() => enterRemainderZeroPhase(), 350);
-    } else {
-      setTimeout(() => finishProblem(), 250);
-    }
+    setTimeout(() => finishProblem(), 250);
   }
   function cleanup(){
     handle.remove(); ghost.remove();
@@ -3035,42 +3107,6 @@ function armRemainderSwipe() {
   c._swipeCleanup = cleanup;
 }
 
-
-/* あまりの整数部が0(「.３」のように一の位が空)かを判定。
-   一の位 = あまりの小数点(boundary=quotientPointBefore)のすぐ左の列。
-   あまりの数字が小数点より右(小数部)だけにある = 整数部が無い → 0が必要。 */
-function needsRemainderLeadingZero() {
-  const c = state.current;
-  if (!c || c.remainderPt === null) return false;
-  const dec = c.dec;
-  const plan = c.plan;
-  const onesCol = dec.quotientPointBefore - 1;   // 一の位の列index
-  if (onesCol < 0) return false;
-  // 最終ステージのあまりの左端の列を求める
-  const lastStage = plan.activeStages[plan.activeStages.length - 1];
-  const remLen = String(plan.stageData[lastStage].remainder).length || 1;
-  const remLeftCol = plan.stageData[lastStage].partialEnd - remLen + 1;
-  // あまりの左端が一の位より右(=整数部に数字が無い)なら0が必要
-  return remLeftCol > onesCol;
-}
-
-/* あまりの一の位に「0」を入力させるフェーズ(「.３」→「0.３」)。 */
-function enterRemainderZeroPhase() {
-  const c = state.current;
-  c.phase = 'inputRemainderZero';
-  enableNumpad(true);
-  const onesCol = c.dec.quotientPointBefore - 1;
-  const remRow = getRemainderRow();
-  const cellId = `r-${c.plan.activeStages[c.plan.activeStages.length - 1]}-${onesCol}`;
-  c._remZeroCellId = cellId;
-  // 一の位マスをスポット表示して入力を促す
-  clearSpotlight();
-  const target = document.getElementById(cellId);
-  if (target) target.classList.add('spot');
-  const num = guideNum('inputRemainderZero');
-  setGuide(`${num} あまりの 一のくらいに 「０」を 入れよう！`);
-  triggerHintAttention();
-}
 
 /* 現在の stepIdx のステップを開始。
    おろすは自動実行、たてる/かける/ひくはテンキー入力待ち。 */
@@ -3470,11 +3506,6 @@ function getInputCellIds(step) {
 function handleNumClick(num) {
   const c = state.current;
   if (!c || c.completed) return;
-  // あまりの一の位に「0」を入力するフェーズ
-  if (c.phase === 'inputRemainderZero') {
-    handleRemainderZeroInput(num);
-    return;
-  }
   if (c.phase !== 'calc') return;       // 小数点移動が終わるまでは入力不可
   if (!c.stepConfirmed) return;
   const step = c.plan.steps[c.stepIdx];
@@ -3512,38 +3543,6 @@ function handleNumClick(num) {
   } else {
     const cellId = cellIds[bufIdx];
     const cell = document.getElementById(cellId);
-    if (cell) {
-      cell.classList.add('error');
-      setTimeout(() => cell.classList.remove('error'), 1200);
-    }
-    const numBtn = document.querySelector(`.num-btn[data-num="${num}"]`);
-    if (numBtn) {
-      numBtn.classList.add('wrong');
-      setTimeout(() => numBtn.classList.remove('wrong'), 600);
-    }
-    c.errorCount++;
-    triggerHintAttention();
-  }
-}
-
-/* あまりの一の位に「0」を入力するフェーズの処理。
-   正しく「0」を押したら 0.３ の形にして問題完了へ。 */
-function handleRemainderZeroInput(num) {
-  const c = state.current;
-  resetIdleTimer();
-  if (num === 0) {
-    const cell = document.getElementById(c._remZeroCellId);
-    if (cell) {
-      cell.textContent = '0';
-      cell.classList.remove('spot');
-      cell.classList.add('correct-pop', 'fade-in');
-      setTimeout(() => cell.classList.remove('correct-pop'), 500);
-    }
-    c.phase = 'done';
-    clearSpotlight();
-    setTimeout(() => finishProblem(), 300);
-  } else {
-    const cell = document.getElementById(c._remZeroCellId);
     if (cell) {
       cell.classList.add('error');
       setTimeout(() => cell.classList.remove('error'), 1200);
@@ -3667,8 +3666,25 @@ function positionCorrectMark() {
   const divTop    = parseFloat(division.style.top)  || 0;
   const divWidth  = parseFloat(division.style.width)  || division.clientWidth;
   const divHeight = parseFloat(division.style.height) || division.clientHeight;
-  const divRight  = divLeft + divWidth;
-  const divBottom = divTop + divHeight;
+  let divRight  = divLeft + divWidth;
+  let divBottom = divTop + divHeight;
+
+  // 実際に描画されている中身(数字セル・あまりタグ等)の最下端/最右端を計測し、
+  // それを配置基準にする。divisionの確保領域より中身が小さい場合に下の空きを正しく使え、
+  // 逆にあまりタグが右にはみ出す場合も重なりを防げる。
+  const panelRect = panel.getBoundingClientRect();
+  let contentBottom = divTop;
+  let contentRight  = divLeft;
+  division.querySelectorAll('.cell, .remainder-tag, .sub-line, .dec-point').forEach(el => {
+    if (el.offsetParent === null && el.style.display === 'none') return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return;
+    contentBottom = Math.max(contentBottom, r.bottom - panelRect.top);
+    contentRight  = Math.max(contentRight,  r.right  - panelRect.left);
+  });
+  // 計測できた場合のみ採用(空振り対策)
+  if (contentBottom > divTop)  divBottom = Math.min(divBottom, Math.max(contentBottom, divTop + 40));
+  if (contentRight  > divLeft) divRight  = Math.max(divLeft, contentRight);
 
   const PAD = 12; // 筆算とマークの間の最小余白(px)
 
@@ -3704,12 +3720,12 @@ function positionCorrectMark() {
     boxLeft = divRight;
     boxTop = 0;
   } else {
-    // どちらの余白も狭い場合: パネル全体に小さめ表示(従来挙動に近いフォールバック)
-    size = Math.min(pw, ph) * 0.5;
-    boxW = pw;
-    boxH = ph;
+    // 下も右も狭い(スマホ等): 筆算の下に必ず縮小して配置し、あまりの数字に重ねない。
     boxLeft = 0;
-    boxTop = 0;
+    boxW = pw;
+    boxTop = divBottom + PAD;
+    boxH = Math.max(60, ph - boxTop);
+    size = Math.max(56, Math.min(pw * 0.6, boxH - PAD));
   }
 
   maru.style.left   = boxLeft + 'px';
@@ -3717,12 +3733,12 @@ function positionCorrectMark() {
   maru.style.width  = boxW + 'px';
   maru.style.height = boxH + 'px';
 
-  // 赤丸サイズを設定(せいかいテキストの分を少し残す)
-  const circleSize = Math.max(60, size * 0.78);
+  // 赤丸サイズを設定(下に出る「せいかい！」テキストの分を残す)
+  const circleSize = Math.max(54, size * 0.7);
   wrap.style.width  = circleSize + 'px';
   wrap.style.height = circleSize + 'px';
-  wrap.style.maxWidth  = '95%';
-  wrap.style.maxHeight = '70%';
+  wrap.style.maxWidth  = '90%';
+  wrap.style.maxHeight = '64%';
 
   // 「つぎのもんだいへ」ボタンを筆算の最下端より下に置く
   // (筆算が縦に長い問題で、ボタンが筆算に重なるのを防ぐ)
@@ -3790,7 +3806,8 @@ function loadQuestion() {
   // 小数を「ひっ算の並び・小数点移動」に変換
   const lvlDef = LEVELS[srcLv] || {};
   const stopPlaces = (typeof lvlDef.stopPlaces === 'number') ? lvlDef.stopPlaces : undefined;
-  const dec = analyzeDecimal(dividendStr, divisorStr, stopPlaces);
+  const remainderAtOriginal = !!lvlDef.remainderAtOriginal;
+  const dec = analyzeDecimal(dividendStr, divisorStr, stopPlaces, remainderAtOriginal);
   // 整数部の商が0でも一の位に「0」を立てさせる(類型1の壁: 2÷5=0.4 の先頭0)
   const forceFirstPos = Math.max(0, dec.quotientPointBefore - 1);
   // 実際に割り算する整数の数字列で計算プランを作る
@@ -3804,11 +3821,14 @@ function loadQuestion() {
   // 移動後の被除数の桁数(calcDigits)が、小数点位置(quotientPointBefore)より多い
   // = 小数点より右に商の桁が並ぶ = 小数の商。浮動小数の誤差を避け整数演算で判定。
   let quotientHasPoint = dec.calcDigits.length > dec.quotientPointBefore;
-  // 類型3・4は、商が整数になっても「小数点の打ち上げ」操作を必ず体験させる。
-  //  小数点を動かしたあと、移動後の小数点を真上に打ち上げる(=右端に商の点を打つ)。
-  if (srcLv === 3 || srcLv === 4) quotientHasPoint = true;
-  // 類型5(あまりレベル)は、被除数を小数第1位まで割るので商は必ず小数 → 点を打つ。
-  if (dec.stopMode) quotientHasPoint = true;
+  // 全レベル「小数点の移動」を伴うが、商に小数点を打つかは上の自動判定に従う。
+  //  - L1(整数商) は商が整数 → 自動では点を打たない。
+  //  - L1(小数商)・L2・L3・L4 は商が小数 → 点を打つ。
+  // 小数第〇位まで割って止めるレベル(stopPlaces>0)があれば商点を打つ(将来用)。
+  if (dec.stopMode && dec.stopPlaces > 0) quotientHasPoint = true;
+  // L5(あまりレベル, stopPlaces=0)も、小数点移動後の点を商の上へ打ち上げる操作を行う。
+  //  商は整数だが「一の位の右に小数点を打つ」操作で位取りを体験させる。
+  if (lvlDef.placeQuotientPointOnRemainder) quotientHasPoint = true;
 
   // この問題で「あまりの小数点」をスワイプして打つか(類型5)。
   // あまりが0でないときのみ(0なら割り切れなのであまり点は不要)。
@@ -3820,12 +3840,12 @@ function loadQuestion() {
   const divisorIsDecimal = (divisorStr.indexOf('.') !== -1);
 
   // 商の小数点を打つ前に「元の小数点の位置を探す」操作を入れるか。
-  //  レベル1: 1〜2問目は探さない(点を最初から薄く表示)、3問目以降は探す。
-  //  レベル4: 探す(被除数の隠れた点を見つける)。
-  //  レベル2・3: 探さない(被除数の点は見えている/移動済み)。
-  let findHidden = false;
-  if (srcLv === 1) findHidden = (state.qIdx >= 2);          // 3問目(index2)以降
-  else if (srcLv === 4) findHidden = !dividendIsDecimal;    // 被除数が整数なら探す
+  //  被除数が整数のとき(小数点が見えていない)は、隠れた点(一の位の右)を探させる。
+  //   - L4: 被除数は必ず整数 → 探す
+  //   - L5: 被除数が整数の問題 → 探す / 小数の問題 → 探さない
+  //   - L1〜L3: 被除数は小数(点が見えている) → 探さない
+  //  ただし商に点を打たないレベル(L5)でも、小数点移動のために被除数の点は必要。
+  let findHidden = !dividendIsDecimal;
 
   // ガイド番号付け用: この問題で順に通る手順
   const guideSteps = [];
@@ -3833,19 +3853,6 @@ function loadQuestion() {
   if (quotientHasPoint) guideSteps.push('placeQuotientPoint');
   guideSteps.push('calc');
   if (needsRemainderPoint) guideSteps.push('placeRemainderPoint');
-
-  // あまりの整数部が0(「.３」)になる場合、一の位に0を入れる手順を追加。
-  let needsRemainderZero = false;
-  if (needsRemainderPoint) {
-    const onesCol = dec.quotientPointBefore - 1;
-    if (onesCol >= 0) {
-      const lastStage = plan.activeStages[plan.activeStages.length - 1];
-      const remLen = String(plan.stageData[lastStage].remainder).length || 1;
-      const remLeftCol = plan.stageData[lastStage].partialEnd - remLen + 1;
-      needsRemainderZero = remLeftCol > onesCol;
-    }
-  }
-  if (needsRemainderZero) guideSteps.push('inputRemainderZero');
 
   state.current = {
     dividendStr, divisorStr, dec, plan,
@@ -3946,9 +3953,13 @@ function buildQuestionSet() {
     state.questions = [];
     const seen = new Set();
     let guard = 0;
-    while (state.questions.length < QUESTIONS_PER_LEVEL && guard < 1000) {
+    while (state.questions.length < QUESTIONS_PER_LEVEL && guard < 2000) {
       guard++;
-      const q = lvl.randomGen();
+      const idx = state.questions.length;
+      // レベル1は出題位置で小数商/整数商を出し分ける(1〜3問目:小数, 4〜5問目:整数)
+      const q = (typeof lvl.randomGenAt === 'function')
+        ? lvl.randomGenAt(idx)
+        : lvl.randomGen();
       const key = q.join(',');
       if (!seen.has(key)) { seen.add(key); state.questions.push([q[0], q[1], state.level]); }
     }
@@ -4401,16 +4412,6 @@ function handleResize() {
     applyDivisionSnapshot(snap);
     renderDecimalPoints(getCellSize(), c.BR);
     armRemainderSwipe();
-    return;
-  }
-  // あまりの0入力フェーズ: 計算結果と点を復元してスポットを再表示
-  if (c.phase === 'inputRemainderZero') {
-    const snap = captureDivisionSnapshot();
-    renderDivision();
-    applyDivisionSnapshot(snap);
-    renderDecimalPoints(getCellSize(), c.BR);
-    const target = document.getElementById(c._remZeroCellId);
-    if (target) target.classList.add('spot');
     return;
   }
   if (c.phase && c.phase !== 'calc' && c.phase !== 'done') {
