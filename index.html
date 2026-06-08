@@ -427,6 +427,24 @@
     border-radius: 6px;
     box-shadow: 0 0 0 2px rgba(245, 200, 66, 0.7);
   }
+  /* 入力できるマス(タップ待ち)。淡い枠で「ここを押せる」と示す */
+  .cell.inputtable {
+    cursor: pointer;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 2px rgba(74, 144, 200, 0.45);
+  }
+  /* いま入力中のアクティブなマス(青く点滅) */
+  .cell.cell-active {
+    background: rgba(74, 144, 200, 0.18);
+    border-radius: 6px;
+    box-shadow: 0 0 0 3px rgba(74, 144, 200, 0.85);
+    animation: cellActivePulse 1.2s ease-in-out infinite;
+    z-index: 3;
+  }
+  @keyframes cellActivePulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(74, 144, 200, 0.85); }
+    50%      { box-shadow: 0 0 0 5px rgba(74, 144, 200, 0.5); }
+  }
   /* ヒント: 計算ソースとなる数字を緑のパルスで強調 */
   .cell.hint-source,
   .divisor-cell.hint-source {
@@ -1032,8 +1050,58 @@
     font-family: var(--font-display); font-weight: 900;
   }
 
-  /* ============ CALCULATOR MODAL ============ */
-  .calc-modal { width: min(92vw, 360px); }
+  /* ============ CALCULATOR (移動可能フローティングウィンドウ) ============ */
+  .calc-window {
+    position: fixed;
+    /* 初期位置は JS(openCalcModal→positionCalcWindow)で設定 */
+    top: 10vh; right: 3vw;
+    width: min(90vw, 340px);
+    background: var(--paper);
+    border-radius: 16px;
+    box-shadow: 0 16px 50px var(--shadow-deep);
+    border: 2px solid var(--line);
+    z-index: 120;
+    display: none;
+    overflow: hidden;
+    animation: pop 0.25s;
+    touch-action: none;       /* ドラッグ時のスクロール抑制 */
+  }
+  .calc-window.active { display: block; }
+  /* タイトルバー(ドラッグハンドル) */
+  .calc-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    background: linear-gradient(180deg, var(--blue), #3f80b5);
+    color: white;
+    padding: 0.8vh 2.5vw;
+    cursor: grab;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .calc-titlebar:active { cursor: grabbing; }
+  .calc-titlebar-label {
+    font-family: var(--font-display); font-weight: 900;
+    font-size: clamp(1rem, 2.2vh, 1.4rem);
+  }
+  .calc-titlebar-grip {
+    margin-left: auto;
+    font-family: var(--font-ui);
+    font-size: clamp(0.6rem, 1.3vh, 0.8rem);
+    opacity: 0.85;
+    letter-spacing: 0.04em;
+  }
+  .calc-win-close {
+    flex: 0 0 auto;
+    width: 3.4vh; height: 3.4vh; min-width: 26px; min-height: 26px;
+    margin-left: 0.4em;
+    background: rgba(255,255,255,0.22);
+    color: white; border-radius: 50%;
+    font-size: 2.2vh; font-weight: 900; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .calc-win-close:active { background: rgba(255,255,255,0.4); }
+  .calc-window-body { padding: 2vh 3vw 2.4vh; }
   /* いま計算している式の案内ボタン */
   .calc-now {
     font-family: var(--font-display); font-weight: 700;
@@ -1475,7 +1543,7 @@
   <div class="title-header">
     <h1 class="app-title">小数の<span class="accent">わり算</span>ひっ算</h1>
     <p class="app-subtitle">〜 小数点を うごかして けいさん 〜</p>
-    <p class="app-version">v8</p>
+    <p class="app-version">v9</p>
   </div>
 
   <div>
@@ -1596,10 +1664,13 @@
 
 
 <!-- ============ CALCULATOR MODAL ============ -->
-<div class="modal-overlay" id="calcModal">
-  <div class="modal calc-modal">
-    <button class="modal-close" id="calcCloseBtn">×</button>
-    <div class="modal-title"><span class="deco">🧮</span> けいさんき <span class="deco">🧮</span></div>
+<div class="calc-window" id="calcModal">
+  <div class="calc-titlebar" id="calcTitlebar">
+    <span class="calc-titlebar-label"><span class="deco">🧮</span> けいさんき</span>
+    <span class="calc-titlebar-grip">⠿ うごかせるよ</span>
+    <button class="calc-win-close" id="calcCloseBtn">×</button>
+  </div>
+  <div class="calc-window-body">
     <!-- いま計算している式の案内 -->
     <div class="calc-now" id="calcNow">いまの けいさん</div>
     <!-- 電卓の画面 -->
@@ -1658,6 +1729,9 @@ const LEVELS = {
     desc: '小数 ÷ 小数\n商が 小数 か せいすう',
     badge: '1',
     decimal: true,
+    // 整数商の問題でも商の一の位の右に小数点を打ち上げる操作を行う。
+    // (小数商の問題は元々 placeQuotientPoint フェーズが走るため影響なし)
+    placeQuotientPointOnRemainder: true,
     // 1〜3問目: 小数商(被除数 小数第2位) / 4〜5問目: 整数商(被除数 小数第1位)
     fixed: [
       ['2.38', '1.7'],  // 1.4
@@ -3140,11 +3214,91 @@ function beginStep() {
   spotlightForStep(step);
   showHintForStep(step);
   updateStepHint();
+  armCellInput(step);
+}
+
+/* ===== マスタップ式入力(②) =====
+   かける/ひく/たてる/おろす の答えマスをタップ可能にし、
+   タップしたマスを起点に、空きマスへ自動で隣接移動しながら入力する。
+   - 入力順は不問。最初に押したマスを起点に、まず左の空き→なければ右の空きへ。
+   - 全マスが埋まった時点で期待値と照合(順不同のため途中判定はしない)。 */
+function armCellInput(step) {
+  const c = state.current;
+  if (!step) return;
+  clearCellInput();
+  const cellIds = getInputCellIds(step);
+  // たてる/おろす は答えマス1個。おろすは自動なのでここには来ない(tateru/kakeru/hiku)。
+  c.inputCellIds = cellIds;
+  c.cellValues = {};               // cellId -> 入力済み数字(文字列)
+  c.activeCellId = null;
+  // 1マスだけのステップ(たてる, または積/あまりが1桁)は自動でアクティブ化
+  // (タップしても良いが、すぐ入力できるよう起点を用意)
+  cellIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('inputtable');
+    el.onclick = () => setActiveCell(id);
+    el.ontouchend = (e) => { e.preventDefault(); setActiveCell(id); };
+  });
+  if (cellIds.length === 1) {
+    setActiveCell(cellIds[0]);
+  }
+}
+
+function setActiveCell(id) {
+  const c = state.current;
+  if (!c || c.phase !== 'calc' || !c.stepConfirmed) return;
+  if (!c.inputCellIds || !c.inputCellIds.includes(id)) return;
+  c.activeCellId = id;
+  c.inputCellIds.forEach(cid => {
+    const el = document.getElementById(cid);
+    if (el) el.classList.toggle('cell-active', cid === id);
+  });
+  resetIdleTimer();
+}
+
+/* アクティブマスの次に進むべき空きマスを返す(起点から左優先、なければ右)。 */
+function nextEmptyCell(fromId) {
+  const c = state.current;
+  const ids = c.inputCellIds;
+  const idx = ids.indexOf(fromId);
+  // 左方向(上位の桁)へ
+  for (let i = idx - 1; i >= 0; i--) {
+    if (c.cellValues[ids[i]] === undefined) return ids[i];
+  }
+  // 右方向(下位の桁)へ
+  for (let i = idx + 1; i < ids.length; i++) {
+    if (c.cellValues[ids[i]] === undefined) return ids[i];
+  }
+  // 残りの空き(念のため全走査)
+  for (const cid of ids) {
+    if (c.cellValues[cid] === undefined) return cid;
+  }
+  return null;
+}
+
+function clearCellInput() {
+  const c = state.current;
+  if (!c) return;
+  if (c.inputCellIds) {
+    c.inputCellIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.remove('inputtable', 'cell-active');
+        el.onclick = null;
+        el.ontouchend = null;
+      }
+    });
+  }
+  c.inputCellIds = null;
+  c.cellValues = null;
+  c.activeCellId = null;
 }
 
 /* ---------- SPOTLIGHT ---------- */
 function clearSpotlight() {
   document.querySelectorAll('.cell.spot').forEach(c => c.classList.remove('spot'));
+  clearCellInput();
   clearHints();
 }
 
@@ -3502,7 +3656,9 @@ function getInputCellIds(step) {
 }
 
 /* ---------- HANDLERS ---------- */
-/* 手順ボタンは廃止。数字入力のみで自動進行する。 */
+/* マスタップ式入力(②):
+   アクティブなマスに数字を入れ、空きマスへ自動移動。
+   全マスが埋まったら期待値と照合する(順不同)。 */
 function handleNumClick(num) {
   const c = state.current;
   if (!c || c.completed) return;
@@ -3510,50 +3666,88 @@ function handleNumClick(num) {
   if (!c.stepConfirmed) return;
   const step = c.plan.steps[c.stepIdx];
   if (!step) return;
+  if (!c.inputCellIds || c.inputCellIds.length === 0) return;
 
   resetIdleTimer();
 
-  const expected = getExpectedDigits(step);
-  const cellIds = getInputCellIds(step);
-  const bufIdx = c.inputBuffer.length;
+  // アクティブマスが無ければ最初の空きマスを起点にする
+  if (!c.activeCellId || c.cellValues[c.activeCellId] !== undefined) {
+    const firstEmpty = c.inputCellIds.find(id => c.cellValues[id] === undefined);
+    if (firstEmpty) setActiveCell(firstEmpty);
+  }
+  const targetId = c.activeCellId;
+  if (!targetId) return;
 
-  if (String(num) === expected[bufIdx]) {
-    c.inputBuffer.push(String(num));
-    const cellId = cellIds[bufIdx];
-    const cell = document.getElementById(cellId);
-    if (cell) {
-      cell.textContent = num;
-      cell.classList.add('correct-pop', 'fade-in');
-      setTimeout(() => cell.classList.remove('correct-pop'), 500);
+  // 入力(まだ確定判定はしない。色は中立で表示)
+  c.cellValues[targetId] = String(num);
+  const cell = document.getElementById(targetId);
+  if (cell) {
+    cell.textContent = num;
+    cell.classList.remove('error', 'faded', 'correct-pop');
+    cell.classList.add('fade-in');
+  }
 
+  // 次の空きマスへアクティブを移す
+  const next = nextEmptyCell(targetId);
+  if (next) {
+    setActiveCell(next);
+    return;   // まだ埋まっていない
+  }
+
+  // 全マスが埋まった → 照合
+  c.inputCellIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('cell-active');
+  });
+  validateCellInput(step);
+}
+
+/* 全マス入力後の正誤判定。 */
+function validateCellInput(step) {
+  const c = state.current;
+  const expected = getExpectedDigits(step);  // 桁順(左→右)の期待値配列
+  const ids = c.inputCellIds;
+  let allCorrect = true;
+  for (let i = 0; i < ids.length; i++) {
+    if (c.cellValues[ids[i]] !== expected[i]) { allCorrect = false; break; }
+  }
+
+  if (allCorrect) {
+    ids.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('inputtable');
+      el.onclick = null; el.ontouchend = null;
+      el.classList.add('correct-pop');
+      setTimeout(() => el.classList.remove('correct-pop'), 500);
       // hikuで結果が0かつ1桁、かつ最終ステージでない場合は薄く表示(「0X」誤読防止)
-      if (step.kind === 'hiku' && num === 0 && expected.length === 1) {
+      if (step.kind === 'hiku' && expected[i] === '0' && expected.length === 1) {
         const isLastStage = c.plan.activeStages[c.plan.activeStages.length - 1] === step.position;
-        if (!isLastStage) cell.classList.add('faded');
+        if (!isLastStage) el.classList.add('faded');
       }
+    });
+    if (step.kind === 'kakeru') {
+      const sub = document.getElementById(`subline-${step.position}`);
+      if (sub) sub.style.display = 'block';
     }
-
-    if (c.inputBuffer.length === expected.length) {
-      if (step.kind === 'kakeru') {
-        const sub = document.getElementById(`subline-${step.position}`);
-        if (sub) sub.style.display = 'block';
-      }
-      advanceStep();
-    }
+    advanceStep();
   } else {
-    const cellId = cellIds[bufIdx];
-    const cell = document.getElementById(cellId);
-    if (cell) {
-      cell.classList.add('error');
-      setTimeout(() => cell.classList.remove('error'), 1200);
-    }
-    const numBtn = document.querySelector(`.num-btn[data-num="${num}"]`);
-    if (numBtn) {
-      numBtn.classList.add('wrong');
-      setTimeout(() => numBtn.classList.remove('wrong'), 600);
-    }
+    // 間違っているマスをエラー表示し、その値だけ消して再入力させる
+    ids.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (c.cellValues[id] !== expected[i]) {
+        el.classList.add('error');
+        setTimeout(() => el.classList.remove('error'), 1200);
+        c.cellValues[id] = undefined;
+        el.textContent = '';
+      }
+    });
     c.errorCount++;
     triggerHintAttention();
+    // 最初の空きマスを再びアクティブに
+    const firstEmpty = ids.find(id => c.cellValues[id] === undefined);
+    if (firstEmpty) setActiveCell(firstEmpty);
   }
 }
 
@@ -3561,6 +3755,7 @@ function advanceStep() {
   const c = state.current;
   c.stepConfirmed = false;
   c.inputBuffer = [];
+  clearCellInput();
   c.stepIdx++;
   clearSpotlight();
   if (c.stepIdx >= c.plan.steps.length) {
@@ -4186,14 +4381,50 @@ function updateCalcNowButton() {
 function openCalcModal() {
   calcClear();
   updateCalcNowButton();
-  document.getElementById('calcModal').classList.add('active');
+  const win = document.getElementById('calcModal');
+  win.classList.add('active');
+  // 初回または画面外なら、画面内の見やすい位置(右下寄り)に配置する
+  positionCalcWindow();
+}
+
+/* 計算機ウィンドウを画面内に配置/補正する。
+   - まだ動かしていなければ右下寄りの初期位置に置く。
+   - リサイズ等で画面外に出ていたら画面内に引き戻す。 */
+function positionCalcWindow(keepCurrent) {
+  const win = document.getElementById('calcModal');
+  if (!win || !win.classList.contains('active')) return;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = win.offsetWidth || Math.min(vw * 0.9, 340);
+  const h = win.offsetHeight || vh * 0.6;
+  let left, top;
+  if (keepCurrent && win.dataset.moved === '1') {
+    left = parseFloat(win.style.left) || 0;
+    top  = parseFloat(win.style.top)  || 0;
+  } else if (win.dataset.moved === '1') {
+    left = parseFloat(win.style.left) || 0;
+    top  = parseFloat(win.style.top)  || 0;
+  } else {
+    // 初期位置: 右端から少し内側、上から少し下
+    left = vw - w - vw * 0.03;
+    top  = vh * 0.10;
+    win.style.transform = 'none';
+  }
+  // 画面内にクランプ(タイトルバーが必ず掴めるよう、最低限見える範囲に)
+  const margin = 8;
+  left = Math.max(margin, Math.min(left, vw - w - margin));
+  top  = Math.max(margin, Math.min(top,  vh - Math.min(h, vh * 0.5)));
+  win.style.left = left + 'px';
+  win.style.top  = top + 'px';
 }
 
 function setupCalcModal() {
   const modal = document.getElementById('calcModal');
   if (!modal) return;
   document.getElementById('calcCloseBtn').onclick = () => modal.classList.remove('active');
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+  // 背景クリックで閉じる挙動は廃止(裏の筆算を見ながら操作できるように)。
+
+  // タイトルバーをドラッグして移動できるようにする
+  setupCalcDrag(modal);
 
   // 「いまの けいさん」ボタン: 現在の式を電卓に流し込む
   document.getElementById('calcNow').onclick = function() {
@@ -4223,6 +4454,54 @@ function setupCalcModal() {
   });
 
   renderCalc();
+}
+
+/* 計算機ウィンドウのドラッグ移動(タイトルバーを掴む)。タッチ/マウス両対応。 */
+function setupCalcDrag(win) {
+  const bar = document.getElementById('calcTitlebar');
+  if (!bar) return;
+  let dragging = false, startX = 0, startY = 0, baseLeft = 0, baseTop = 0;
+
+  function pointerDown(e) {
+    // 閉じるボタン上では開始しない
+    if (e.target && e.target.id === 'calcCloseBtn') return;
+    dragging = true;
+    win.dataset.moved = '1';
+    win.style.transform = 'none';
+    const p = e.touches ? e.touches[0] : e;
+    startX = p.clientX; startY = p.clientY;
+    const rect = win.getBoundingClientRect();
+    baseLeft = rect.left; baseTop = rect.top;
+    // 現在位置を明示的に left/top へ反映(初期 transform 解除後のずれ防止)
+    win.style.left = baseLeft + 'px';
+    win.style.top  = baseTop + 'px';
+    e.preventDefault();
+  }
+  function pointerMove(e) {
+    if (!dragging) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = win.offsetWidth, h = win.offsetHeight;
+    const margin = 8;
+    let left = baseLeft + dx;
+    let top  = baseTop + dy;
+    // 画面内にクランプ(タイトルバーが見える範囲を必ず残す)
+    left = Math.max(margin, Math.min(left, vw - w - margin));
+    top  = Math.max(margin, Math.min(top,  vh - Math.min(h, vh * 0.5)));
+    win.style.left = left + 'px';
+    win.style.top  = top + 'px';
+    e.preventDefault();
+  }
+  function pointerUp() { dragging = false; }
+
+  bar.addEventListener('mousedown', pointerDown);
+  bar.addEventListener('touchstart', pointerDown, { passive: false });
+  window.addEventListener('mousemove', pointerMove);
+  window.addEventListener('touchmove', pointerMove, { passive: false });
+  window.addEventListener('mouseup', pointerUp);
+  window.addEventListener('touchend', pointerUp);
 }
 
 /* ---------- HINT MODAL ---------- */
@@ -4393,6 +4672,8 @@ function setupResultScreen() {
    現在の表示内容をスナップショット → 再描画 → 復元 を行う */
 let resizeTimer = null;
 function handleResize() {
+  // 計算機ウィンドウが開いていれば画面内に収まるよう補正
+  positionCalcWindow(true);
   if (!state.current) return;
   const mainActive = document.getElementById('mainScreen').classList.contains('active');
   if (!mainActive) return;
